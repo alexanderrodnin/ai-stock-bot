@@ -1,0 +1,30 @@
+{
+  "name": "tg-bot",
+  "version": "1.0.0",
+  "description": "A Telegram bot that generates images using OpenAI's DALL·E 3 API",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "demo": "DEMO_MODE=true node index.js"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "openai",
+    "dall-e",
+    "image-generation"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "dotenv": "^16.5.0",
+    "node-telegram-bot-api": "^0.66.0",
+    "openai": "^5.3.0",
+    "sharp": "^0.34.2",
+    "uuid": "^11.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
