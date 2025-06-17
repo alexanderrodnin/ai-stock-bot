@@ -104,8 +104,16 @@ bot.on('message', async (msg) => {
     let caption = '';
     if (result.usedSource === 'OpenAI') {
       caption = `Generated image based on your prompt using ${result.usedModel}`;
-    } else {
+    } else if (result.usedSource === 'Demo Mode') {
       caption = 'Demo Mode: Using a stock image related to your prompt. (OpenAI API unavailable)';
+    } else if (result.usedSource.includes('Content Policy')) {
+      caption = 'Content Policy Restriction: Using a stock image instead. Your prompt may contain restricted content.';
+    } else if (result.usedSource.includes('Content Restriction')) {
+      caption = 'Content Restriction: Using a stock image instead. Your prompt may contain restricted content.';
+    } else if (result.usedSource.includes('Fallback')) {
+      caption = 'API Error: Using a stock image related to your prompt. The OpenAI service encountered an error.';
+    } else {
+      caption = 'Using a stock image related to your prompt. (OpenAI API unavailable)';
     }
     
     // Different approach based on whether it's a URL or local file
