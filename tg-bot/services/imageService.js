@@ -120,7 +120,6 @@ class ImageService {
               prompt: sanitizedPrompt,
               n: 1,
               size: this.imageSize,
-              quality: "standard",
             });
 
             usedModel = this.models.fallback;
