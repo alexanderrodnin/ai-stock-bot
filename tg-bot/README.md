@@ -19,6 +19,8 @@ A Telegram bot that generates images based on text prompts using OpenAI's DALL·
 
 ## Installation
 
+### Standard Installation
+
 1. Clone this repository or download the source code.
 
 2. Install the dependencies:
@@ -33,20 +35,48 @@ A Telegram bot that generates images based on text prompts using OpenAI's DALL·
    OPENAI_API_KEY=your_openai_api_key_here
    ```
 
+### Docker Installation
+
+1. Clone this repository or download the source code.
+
+2. Build and run using Docker Compose:
+   ```bash
+   cd tg-bot
+   docker-compose up -d
+   ```
+   
+   This will:
+   - Build the Docker image from the Dockerfile
+   - Create and start a container with your bot
+   - Run in detached mode (-d flag)
+
+3. Environment variables:
+   - Docker Compose will automatically use variables from your local `.env` file
+   - Alternatively, you can edit the docker-compose.yml file to set environment variables directly
+
 ## Usage
 
 ### Standard Mode
 Start the bot with access to OpenAI API:
 ```bash
+# Without Docker
 npm start
 # or
 node index.js
+
+# With Docker
+docker-compose up -d
 ```
 
 ### Demo Mode
 Start the bot in demo mode (uses mock images when API fails):
 ```bash
+# Without Docker
 npm run demo
+
+# With Docker
+# First uncomment the DEMO_MODE line in docker-compose.yml
+docker-compose up -d
 ```
 
 The bot will begin polling for messages. Users can interact with the bot by sending:
