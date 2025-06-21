@@ -1,0 +1,16 @@
+# Node modules
+node_modules
+
+# Environment variables - we'll provide these at runtime
+.env
+.env.*
+
+# Git related
+.git
+.gitignore
+
+# Temp directory - we create it in the Dockerfile
+temp/*
+
+# Logs
+*.log
