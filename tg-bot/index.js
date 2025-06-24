@@ -116,14 +116,24 @@ bot.on('message', async (msg) => {
       caption = 'Using a stock image related to your prompt. (OpenAI API unavailable)';
     }
     
+    // Create inline keyboard with a button to place image on 123RF
+    const options = {
+      caption: caption, // Preserve the existing caption text
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "Place this image on 123RF", callback_data: "place_on_123rf" }]
+        ]
+      }
+    };
+
     // Different approach based on whether it's a URL or local file
     if (!result.isLocalFile) {
       // For OpenAI generated images, use the URL
-      await bot.sendPhoto(chatId, result.imageUrl, { caption });
+      await bot.sendPhoto(chatId, result.imageUrl, options);
     } else {
       // For local files, use fs.createReadStream
       console.log(`Sending local image file: ${result.imageUrl}`);
-      await bot.sendPhoto(chatId, fs.createReadStream(result.imageUrl), { caption });
+      await bot.sendPhoto(chatId, fs.createReadStream(result.imageUrl), options);
       
       // Clean up the local file after sending
       imageService.cleanupLocalImage(result.imageUrl);
@@ -145,6 +155,29 @@ bot.on('message', async (msg) => {
 
 // Log when bot is started
 console.log('Telegram Bot is running...');
+
+// Handle callback queries from inline keyboard buttons
+bot.on('callback_query', async (callbackQuery) => {
+  const chatId = callbackQuery.message.chat.id;
+  const messageId = callbackQuery.message.message_id;
+  
+  // Handle different callback data
+  if (callbackQuery.data === 'place_on_123rf') {
+    // For now, just acknowledge the button press
+    await bot.answerCallbackQuery(callbackQuery.id, {
+      text: 'This feature will be implemented soon: Publishing image to 123RF'
+    });
+    
+    // Inform the user about the future functionality
+    await bot.sendMessage(
+      chatId,
+      'In the future, this button will publish the image to 123RF stock image service.'
+    );
+    
+    // Log the action
+    console.log(`User ${callbackQuery.from.id} requested to place image on 123RF`);
+  }
+});
 
 // Handle errors
 bot.on('polling_error', (error) => {
