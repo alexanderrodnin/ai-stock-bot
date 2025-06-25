@@ -1,8 +1,10 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
+const path = require('path');
 const { cleanupTempFiles } = require('./download-image');
 const ImageService = require('./services/imageService');
+const FtpService = require('./services/ftpService');
 
 // Check if running in demo mode
 const DEMO_MODE = process.env.DEMO_MODE === 'true';
@@ -12,11 +14,11 @@ if (DEMO_MODE) {
   console.log('Mock images will be provided instead of real AI-generated images');
 }
 
-// Clean up temporary files every hour
+// Clean up temporary files every 24 hours
 setInterval(() => {
   console.log('Cleaning up temporary image files...');
   cleanupTempFiles();
-}, 3600000); // 1 hour
+}, 86400000); // 24 hours
 
 // Check for required environment variables
 if (!process.env.TELEGRAM_TOKEN) {
@@ -32,6 +34,14 @@ const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
 const imageService = new ImageService({
   apiKey: process.env.OPENAI_API_KEY,
   demoMode: process.env.DEMO_MODE === 'true'
+});
+
+// Initialize the FTP service
+const ftpService = new FtpService({
+  host: process.env.FTP_HOST,
+  user: process.env.FTP_USER,
+  password: process.env.FTP_PASSWORD,
+  remoteDir: process.env.FTP_REMOTE_DIR || '/ai_image'
 });
 
 // Constants
@@ -127,12 +137,17 @@ bot.on('message', async (msg) => {
       }
     };
 
+    // Store the image path in the cache for this user
+    userImageCache.set(msg.from.id, result.imageUrl);
+    console.log(`Stored image path in cache for user ${msg.from.id}: ${result.imageUrl}`);
+    
     // Send the local image file
     console.log(`Sending local image file: ${result.imageUrl}`);
     await bot.sendPhoto(chatId, fs.createReadStream(result.imageUrl), options);
     
-    // Clean up the local file after sending
-    imageService.cleanupLocalImage(result.imageUrl);
+    // We no longer clean up the image immediately after sending
+    // Instead, we'll keep it for potential upload to 123RF
+    // The cleanupTempFiles function will handle old files
 
     // Delete the processing message
     bot.deleteMessage(chatId, processingMessage.message_id);
@@ -151,26 +166,93 @@ bot.on('message', async (msg) => {
 // Log when bot is started
 console.log('Telegram Bot is running...');
 
+// Store image paths for callback queries
+// This will store the image path when a user receives an image
+// and then retrieve it when they click the "Place on 123RF" button
+const userImageCache = new Map();
+
 // Handle callback queries from inline keyboard buttons
 bot.on('callback_query', async (callbackQuery) => {
   const chatId = callbackQuery.message.chat.id;
   const messageId = callbackQuery.message.message_id;
+  const userId = callbackQuery.from.id;
   
   // Handle different callback data
   if (callbackQuery.data === 'place_on_123rf') {
-    // For now, just acknowledge the button press
+    // Acknowledge the button press
     await bot.answerCallbackQuery(callbackQuery.id, {
-      text: 'This feature will be implemented soon: Publishing image to 123RF'
+      text: 'Processing your request to publish on 123RF...'
     });
     
-    // Inform the user about the future functionality
-    await bot.sendMessage(
+    // Check if we have the image path for this user
+    const imagePath = userImageCache.get(userId);
+    
+    if (!imagePath || !fs.existsSync(imagePath)) {
+      // If we don't have the image path or the file doesn't exist anymore
+      await bot.sendMessage(
+        chatId,
+        'Sorry, the image is no longer available. Please generate a new image and try again.'
+      );
+      return;
+    }
+    
+    // Send a status message
+    const statusMessage = await bot.sendMessage(
       chatId,
-      'In the future, this button will publish the image to 123RF stock image service.'
+      'Uploading image to 123RF, please wait...'
     );
     
+    try {
+      // Upload the image to 123RF
+      console.log(`Attempting to upload image ${imagePath} to 123RF for user ${userId}`);
+      const uploadResult = await ftpService.uploadImage(imagePath);
+      
+      // Delete the status message
+      await bot.deleteMessage(chatId, statusMessage.message_id);
+      
+      if (uploadResult.success) {
+        // If upload was successful
+        await bot.sendMessage(
+          chatId,
+          `✅ Your image has been successfully uploaded to 123RF!\n\nFile: ${uploadResult.fileName}\nDirectory: ${uploadResult.directory}\n\nIt may take some time for the image to appear on the 123RF website.`
+        );
+        
+        // Make a copy of the image before it gets deleted
+        // This is useful if the user wants to upload the same image again
+        const tempDir = path.join(__dirname, 'temp');
+        const originalFileName = path.basename(imagePath);
+        const backupFileName = `${userId}_${Date.now()}_${originalFileName}`;
+        const backupFilePath = path.join(tempDir, backupFileName);
+        
+        try {
+          fs.copyFileSync(imagePath, backupFilePath);
+          userImageCache.set(userId, backupFilePath);
+          console.log(`Created backup of image at ${backupFilePath}`);
+        } catch (copyErr) {
+          console.error(`Error creating backup of image: ${copyErr.message}`);
+          // If we can't create a backup, just keep the original path
+        }
+      } else {
+        // If upload failed
+        await bot.sendMessage(
+          chatId,
+          `❌ Failed to upload image to 123RF: ${uploadResult.message}\n\nPlease try again later or contact support.`
+        );
+      }
+    } catch (error) {
+      // Delete the status message
+      await bot.deleteMessage(chatId, statusMessage.message_id).catch(() => {});
+      
+      // Handle unexpected errors
+      console.error('Error uploading to 123RF:', error);
+      await bot.sendMessage(
+        chatId,
+        '❌ An unexpected error occurred while uploading to 123RF. Please try again later.'
+      );
+    }
+    
     // Log the action
-    console.log(`User ${callbackQuery.from.id} requested to place image on 123RF`);
+    console.log(`User ${userId} requested to place image on 123RF`);
   }
 });
 

@@ -7,9 +7,6 @@ yarn-error.log
 # Environment variables
 .env
 
-# Example of upload images on 123RF
-upload-example/
-
 # Downloaded images and temporary files
 temp/
 *.jpg
