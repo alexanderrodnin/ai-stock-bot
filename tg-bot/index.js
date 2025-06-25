@@ -98,6 +98,7 @@ bot.on('message', async (msg) => {
     console.log('Generating image for prompt:', prompt);
     
     // Generate the image using the image service
+    // This will download the image to a local file in all cases
     const result = await imageService.generateImage(prompt);
     
     // Send the image to the user
@@ -126,18 +127,12 @@ bot.on('message', async (msg) => {
       }
     };
 
-    // Different approach based on whether it's a URL or local file
-    if (!result.isLocalFile) {
-      // For OpenAI generated images, use the URL
-      await bot.sendPhoto(chatId, result.imageUrl, options);
-    } else {
-      // For local files, use fs.createReadStream
-      console.log(`Sending local image file: ${result.imageUrl}`);
-      await bot.sendPhoto(chatId, fs.createReadStream(result.imageUrl), options);
-      
-      // Clean up the local file after sending
-      imageService.cleanupLocalImage(result.imageUrl);
-    }
+    // Send the local image file
+    console.log(`Sending local image file: ${result.imageUrl}`);
+    await bot.sendPhoto(chatId, fs.createReadStream(result.imageUrl), options);
+    
+    // Clean up the local file after sending
+    imageService.cleanupLocalImage(result.imageUrl);
 
     // Delete the processing message
     bot.deleteMessage(chatId, processingMessage.message_id);

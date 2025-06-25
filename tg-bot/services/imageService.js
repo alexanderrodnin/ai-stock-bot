@@ -59,8 +59,7 @@ class ImageService {
         return {
           imageUrl: localImagePath,
           usedSource: 'Demo Mode',
-          usedModel: null,
-          isLocalFile: true
+          usedModel: null
         };
       }
       
@@ -90,12 +89,17 @@ class ImageService {
             if (!response.data || !response.data[0] || !response.data[0].url) {
               throw new Error('Unexpected API response structure');
             }
+            
+            // Download the image from OpenAI URL to a local file
+            console.log(`Downloading image from OpenAI URL...`);
+            const openaiUrl = response.data[0].url;
+            const localImagePath = await downloadImage(openaiUrl);
+            console.log(`OpenAI image downloaded to ${localImagePath}`);
 
             return {
-              imageUrl: response.data[0].url,
+              imageUrl: localImagePath,
               usedSource: 'OpenAI',
-              usedModel: usedModel,
-              isLocalFile: false
+              usedModel: usedModel
             };
           } catch (primaryModelError) {
             // Check if this is a content policy violation
@@ -128,12 +132,17 @@ class ImageService {
             if (!response.data || !response.data[0] || !response.data[0].url) {
               throw new Error('Unexpected API response structure');
             }
+            
+            // Download the image from OpenAI URL to a local file
+            console.log(`Downloading image from OpenAI URL (${this.models.fallback})...`);
+            const openaiUrl = response.data[0].url;
+            const localImagePath = await downloadImage(openaiUrl);
+            console.log(`OpenAI image (${this.models.fallback}) downloaded to ${localImagePath}`);
 
             return {
-              imageUrl: response.data[0].url,
+              imageUrl: localImagePath,
               usedSource: 'OpenAI',
-              usedModel: usedModel,
-              isLocalFile: false
+              usedModel: usedModel
             };
           }
         } catch (apiError) {
@@ -161,8 +170,7 @@ class ImageService {
           return {
             imageUrl: localImagePath,
             usedSource: `Fallback (${fallbackReason})`,
-            usedModel: null,
-            isLocalFile: true
+            usedModel: null
           };
         }
       } else {
@@ -179,8 +187,7 @@ class ImageService {
         return {
           imageUrl: localImagePath,
           usedSource: 'Demo Mode',
-          usedModel: null,
-          isLocalFile: true
+          usedModel: null
         };
       }
     } catch (error) {
