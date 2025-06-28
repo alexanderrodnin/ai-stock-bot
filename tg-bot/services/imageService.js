@@ -80,7 +80,7 @@ class ImageService {
               prompt: sanitizedPrompt,
               n: 1,
               size: this.imageSize,
-              quality: "standard",
+              quality: "hd",
             });
 
             usedModel = this.models.primary;

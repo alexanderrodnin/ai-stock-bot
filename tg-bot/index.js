@@ -214,7 +214,8 @@ bot.on('callback_query', async (callbackQuery) => {
         // If upload was successful
         await bot.sendMessage(
           chatId,
-          `✅ Your image has been successfully uploaded to 123RF!\n\nFile: ${uploadResult.fileName}\nDirectory: ${uploadResult.directory}\n\nIt may take some time for the image to appear on the 123RF website.`
+          `✅ Your image has been successfully uploaded to 123RF!\n\nFollow the [link](https://www.123rf.com/contributor/upload-content?category=ai-images#uploadQueue) and click on "Upload via FTP" and then "Proceed" to accept the image!\n\nAfter that, you will be redirected to the "Manage content" page in the "Draft" tab. Wait for the image to be processed, click on it and click on the "AI auto-fill all" button to add a description and meta tags to the image. After that, click "Submit for review"`,
+          { parse_mode: 'Markdown' }
         );
         
         // Make a copy of the image before it gets deleted

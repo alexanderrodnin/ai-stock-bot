@@ -44,15 +44,21 @@ async function downloadImage(url) {
         file.close();
         
         // Process the image with sharp to ensure valid dimensions
-        // For 123RF, we need at least 4096x4096 pixels
+        // For 123RF, we need at least 4000x4000 pixels
         sharp(tempFilename)
           .resize({
-            width: 4096,
-            height: 4096,
+            width: 4000,
+            height: 4000,
             fit: 'inside',
             withoutEnlargement: false // Allow enlargement for smaller images
           })
-          .jpeg({ quality: 72 }) // Higher quality for stock photos
+          .jpeg({
+            quality: 72,
+            progressive: false, // Baseline JPEG for better compatibility
+            mozjpeg: true // Better compression
+          }) // Higher quality for stock photos
+          .withMetadata() // Save metadata
+          .toColorspace('srgb') // Force install sRGB
           .toFile(finalFilename)
           .then(() => {
             // Remove the temporary file
