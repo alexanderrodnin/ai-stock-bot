@@ -43,15 +43,22 @@ async function downloadImage(url) {
       file.on('finish', () => {
         file.close();
         
-        // Process the image with sharp to ensure valid dimensions for Telegram
+        // Process the image with sharp to ensure valid dimensions
+        // For 123RF, we need at least 4000x4000 pixels
         sharp(tempFilename)
           .resize({
-            width: 1024,
-            height: 1024,
+            width: 4000,
+            height: 4000,
             fit: 'inside',
-            withoutEnlargement: true
+            withoutEnlargement: false // Allow enlargement for smaller images
           })
-          .jpeg({ quality: 90 })
+          .jpeg({
+            quality: 72,
+            progressive: false, // Baseline JPEG for better compatibility
+            mozjpeg: true // Better compression
+          }) // Higher quality for stock photos
+          .withMetadata() // Save metadata
+          .toColorspace('srgb') // Force install sRGB
           .toFile(finalFilename)
           .then(() => {
             // Remove the temporary file
@@ -90,7 +97,7 @@ async function downloadImage(url) {
  * Cleans up temporary files older than the specified age
  * @param {number} maxAgeMs - Maximum age in milliseconds
  */
-function cleanupTempFiles(maxAgeMs = 3600000) { // Default: 1 hour
+function cleanupTempFiles(maxAgeMs = 86400000) { // Default: 24 hours (increased from 1 hour)
   fs.readdir(tempDir, (err, files) => {
     if (err) {
       console.error('Error reading temp directory:', err);
