@@ -13,10 +13,16 @@ const router = express.Router();
 
 // Validation middleware for user creation
 const validateUserCreation = [
-  body('telegramId')
+  body('externalId')
     .isString()
     .isLength({ min: 1 })
-    .withMessage('Telegram ID is required'),
+    .withMessage('External ID is required'),
+  
+  body('externalSystem')
+    .optional()
+    .isString()
+    .isIn(['telegram', 'web', 'mobile', 'api', 'other'])
+    .withMessage('External system must be one of: telegram, web, mobile, api, other'),
   
   body('username')
     .optional()
@@ -44,7 +50,12 @@ const validateUserCreation = [
   body('preferences')
     .optional()
     .isObject()
-    .withMessage('Preferences must be an object')
+    .withMessage('Preferences must be an object'),
+  
+  body('metadata')
+    .optional()
+    .isObject()
+    .withMessage('Metadata must be an object')
 ];
 
 // Validation middleware for user update
@@ -95,10 +106,11 @@ router.get('/:id',
   asyncHandler(userController.getUserById)
 );
 
-// GET /api/users/telegram/:telegramId - Get user by Telegram ID
-router.get('/telegram/:telegramId',
-  param('telegramId').isString().withMessage('Invalid Telegram ID'),
-  asyncHandler(userController.getUserByTelegramId)
+// GET /api/users/external/:externalSystem/:externalId - Get user by External ID
+router.get('/external/:externalSystem/:externalId',
+  param('externalSystem').isString().isIn(['telegram', 'web', 'mobile', 'api', 'other']).withMessage('Invalid external system'),
+  param('externalId').isString().withMessage('Invalid external ID'),
+  asyncHandler(userController.getUserByExternalId)
 );
 
 // PUT /api/users/:id - Update user
