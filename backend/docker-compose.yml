@@ -1,41 +1,6 @@
 version: '3.8'
 
 services:
-  # Backend API Service
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: development
-    container_name: ai-stock-bot-backend
-    ports:
-      - "3000:3000"
-    environment:
-      - NODE_ENV=development
-      - PORT=3000
-      - MONGODB_URI=mongodb://admin:password123@mongodb:27017/ai-stock-bot?authSource=admin
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - FTP_HOST=${FTP_HOST}
-      - FTP_USER=${FTP_USER}
-      - FTP_PASSWORD=${FTP_PASSWORD}
-      - FTP_REMOTE_PATH=${FTP_REMOTE_PATH}
-      - RATE_LIMIT_WINDOW=900000
-      - RATE_LIMIT_MAX=100
-      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
-      - LOG_LEVEL=debug
-    volumes:
-      # Mount source code for hot reload
-      - .:/app
-      - /app/node_modules
-      # Mount temp directory for image processing
-      - ./temp:/app/temp
-    depends_on:
-      - mongodb
-    networks:
-      - ai-stock-bot-network
-    restart: unless-stopped
-    command: npm run dev
-
   # MongoDB Database Service
   mongodb:
     image: mongo:7.0.5
