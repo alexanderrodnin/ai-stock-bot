@@ -1,0 +1,69 @@
+# Node modules
+node_modules
+npm-debug.log
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+.env.staging
+
+# Git
+.git
+.gitignore
+
+# Documentation
+README.md
+*.md
+
+# IDE
+.vscode
+.idea
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage
+.nyc_output
+
+# Cache
+.npm
+.eslintcache
+
+# Build output
+dist
+build
+
+# Temporary files
+temp
+*.tmp
+*.temp
+
+# Docker
+Dockerfile
+.dockerignore
+docker-compose*.yml
+
+# Tests
+test
+tests
+__tests__
+
+# Development tools
+.prettierrc
+.eslintrc*
+jest.config*

@@ -9,7 +9,14 @@
     "test": "jest",
     "lint": "eslint src/",
     "docker:build": "docker build -t ai-stock-bot-api .",
-    "docker:run": "docker run -p 3000:3000 --env-file .env ai-stock-bot-api"
+    "docker:run": "docker run -p 3000:3000 --env-file .env ai-stock-bot-api",
+    "docker:up": "docker-compose up -d",
+    "docker:up:build": "docker-compose up -d --build",
+    "docker:down": "docker-compose down",
+    "docker:down:volumes": "docker-compose down -v",
+    "docker:logs": "docker-compose logs -f backend",
+    "docker:mongo": "docker-compose up -d mongodb",
+    "docker:tools": "docker-compose --profile tools up -d"
   },
   "keywords": [
     "api",

@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Backend API Service
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: ai-stock-bot-backend
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - MONGODB_URI=mongodb://mongodb:27017/ai-stock-bot
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FTP_HOST=${FTP_HOST}
+      - FTP_USER=${FTP_USER}
+      - FTP_PASSWORD=${FTP_PASSWORD}
+      - RATE_LIMIT_WINDOW=900000
+      - RATE_LIMIT_MAX=100
+      - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+      - LOG_LEVEL=debug
+    volumes:
+      # Mount source code for hot reload
+      - .:/app
+      - /app/node_modules
+      # Mount temp directory for image processing
+      - ./temp:/app/temp
+    depends_on:
+      - mongodb
+    networks:
+      - ai-stock-bot-network
+    restart: unless-stopped
+    command: npm run dev
+
+  # MongoDB Database Service
+  mongodb:
+    image: mongo:7.0.5
+    container_name: ai-stock-bot-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+      - MONGO_INITDB_DATABASE=ai-stock-bot
+    volumes:
+      # Persist MongoDB data
+      - mongodb_data:/data/db
+      # Custom initialization scripts
+      - ./docker/mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - ai-stock-bot-network
+    restart: unless-stopped
+    command: mongod --auth --bind_ip_all
+
+  # MongoDB Express (Web UI for MongoDB)
+  mongo-express:
+    image: mongo-express:1.0.0
+    container_name: ai-stock-bot-mongo-express
+    ports:
+      - "8081:8081"
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=admin
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=password123
+      - ME_CONFIG_MONGODB_URL=mongodb://admin:password123@mongodb:27017/
+      - ME_CONFIG_BASICAUTH_USERNAME=admin
+      - ME_CONFIG_BASICAUTH_PASSWORD=admin
+    depends_on:
+      - mongodb
+    networks:
+      - ai-stock-bot-network
+    restart: unless-stopped
+    profiles:
+      - tools
+
+# Named volumes for data persistence
+volumes:
+  mongodb_data:
+    driver: local
+    name: ai-stock-bot-mongodb-data
+
+# Custom network for service communication
+networks:
+  ai-stock-bot-network:
+    driver: bridge
+    name: ai-stock-bot-network

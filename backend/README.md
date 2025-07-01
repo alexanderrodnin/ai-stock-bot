@@ -44,6 +44,42 @@ npm start
 
 API будет доступен по адресу: `http://localhost:3000`
 
+### Запуск через Docker (рекомендуемый)
+
+1. Скопируйте файл переменных окружения для Docker:
+```bash
+cp .env.docker .env
+```
+
+2. Заполните обязательные переменные в `.env`:
+```bash
+OPENAI_API_KEY=your_openai_api_key_here
+```
+
+3. Запустите сервисы:
+```bash
+# Запуск с автоматической сборкой
+npm run docker:up:build
+
+# Или используйте docker-compose напрямую
+docker-compose up -d --build
+```
+
+4. Проверьте статус сервисов:
+```bash
+docker-compose ps
+```
+
+5. Просмотр логов:
+```bash
+npm run docker:logs
+```
+
+Сервисы будут доступны:
+- **Backend API**: http://localhost:3000
+- **MongoDB**: localhost:27017
+- **Mongo Express** (опционально): http://localhost:8081
+
 ## 📋 API Endpoints
 
 ### Health Check
@@ -171,9 +207,35 @@ curl http://localhost:3000/health
 
 ## 🐳 Docker
 
-```dockerfile
-# Dockerfile будет добавлен отдельно
+### Docker команды
+
+```bash
+# Основные команды
+npm run docker:up:build    # Запуск с пересборкой
+npm run docker:up          # Запуск без пересборки  
+npm run docker:down        # Остановка сервисов
+npm run docker:down:volumes # Остановка с удалением volumes
+npm run docker:logs        # Просмотр логов backend
+
+# Дополнительные команды
+npm run docker:mongo       # Запуск только MongoDB
+npm run docker:tools       # Запуск с Mongo Express
 ```
+
+### Docker Compose структура
+
+```yaml
+# docker-compose.yml включает:
+- backend:     Node.js API (build из Dockerfile)
+- mongodb:     MongoDB 7.0.5 с персистентным storage
+- mongo-express: Web UI для MongoDB (опционально)
+```
+
+### Volumes и Networks
+
+- **mongodb_data**: Персистентное хранение данных MongoDB
+- **ai-stock-bot-network**: Изолированная сеть для сервисов
+- **Hot reload**: Код монтируется для live обновлений
 
 ## 🧪 Тестирование
 
