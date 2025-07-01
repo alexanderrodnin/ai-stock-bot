@@ -3,30 +3,41 @@
 
 LAYOUT_WITH_LEGEND()
 
-title Component Diagram for AI Stock Bot - Telegram Image Generation Bot
+title Component Diagram for AI Stock Bot - Multi-Interface Image Generation System
 
-Person(user, "Telegram User", "End user requesting image generation")
+Person(user, "User", "End user requesting image generation")
+
+System_Boundary(frontend_interfaces, "Frontend Interfaces") {
+    Container(telegram_bot, "Telegram Bot", "Node.js, node-telegram-bot-api", "Telegram interface for image generation and 123RF upload")
+    Container(web_interface, "Web Interface", "Future", "Web-based interface for image generation")
+    Container(mobile_app, "Mobile App", "Future", "Mobile application interface")
+}
 
 System_Boundary(telegram_system, "Telegram Platform") {
     Container(telegram_api, "Telegram Bot API", "REST API", "Handles bot communication, message delivery")
 }
 
-System_Boundary(openai_system, "OpenAI Platform") {
-    Container(openai_api, "OpenAI Images API", "REST API", "DALL-E 3/2 image generation service")
-}
-
-System_Boundary(bot_system, "AI Stock Bot Application") {
-    Container_Boundary(nodejs_app, "Node.js Application") {
-        Component(bot_controller, "Bot Controller", "Node.js, node-telegram-bot-api", "Main bot logic, command handling, message processing, callback queries")
+System_Boundary(backend_system, "AI Stock Bot Backend") {
+    Container(api_gateway, "API Gateway", "Node.js, Express", "REST API for all frontend interfaces")
+    
+    Container_Boundary(core_services, "Core Services") {
         Component(image_service, "Image Service", "Node.js Class", "Orchestrates image generation with fallback strategies")
         Component(ftp_service, "FTP Service", "Node.js Class, basic-ftp", "Uploads images to 123RF via FTP")
         Component(download_service, "Download Service", "Node.js Module", "Downloads and manages temporary image files")
         Component(mock_service, "Mock Image Service", "Node.js Module", "Provides fallback stock images")
+        Component(user_service, "User Service", "Node.js Class", "User management and session handling")
         Component(config_manager, "Configuration Manager", "dotenv", "Manages environment variables and API keys")
-        
-        ComponentDb(temp_storage, "Temporary File Storage", "Local Filesystem", "Stores downloaded images temporarily")
-        ComponentDb(user_cache, "User Image Cache", "In-Memory Map", "Caches image paths for user callbacks")
     }
+    
+    Container_Boundary(data_layer, "Data Layer") {
+        ComponentDb(temp_storage, "Temporary File Storage", "Local Filesystem", "Stores downloaded images temporarily")
+        ComponentDb(user_cache, "User Session Cache", "Redis/Memory", "Caches user sessions and image paths")
+        ComponentDb(database, "Database", "PostgreSQL/MongoDB", "Persistent user data and image metadata")
+    }
+}
+
+System_Boundary(openai_system, "OpenAI Platform") {
+    Container(openai_api, "OpenAI Images API", "REST API", "DALL-E 3/2 image generation service")
 }
 
 System_Boundary(external_images, "External Image Sources") {
@@ -35,64 +46,102 @@ System_Boundary(external_images, "External Image Sources") {
 
 System_Boundary(stock_platform, "123RF Platform") {
     Container(ftp_server, "123RF FTP Server", "FTP Server", "Receives uploaded images for stock marketplace")
-    Container(web_interface, "123RF Web Interface", "Web Platform", "Content management and review interface")
+    Container(rf_web_interface, "123RF Web Interface", "Web Platform", "Content management and review interface")
 }
 
-' User interactions
-Rel(user, telegram_api, "Sends text prompts", "HTTPS")
-Rel(telegram_api, user, "Receives generated images", "HTTPS")
+' User interactions with frontend interfaces
+Rel(user, telegram_bot, "Sends prompts, receives images", "Telegram Messages")
+Rel(user, web_interface, "Web requests", "HTTPS", "Future")
+Rel(user, mobile_app, "Mobile requests", "HTTPS", "Future")
 
-' Bot to Telegram API
-Rel(bot_controller, telegram_api, "Polls for messages, sends images", "HTTPS/Webhook")
-Rel(telegram_api, bot_controller, "Delivers user messages", "HTTPS")
+' Frontend to Telegram Platform
+Rel(telegram_bot, telegram_api, "Polls messages, sends images", "HTTPS/Webhook")
+Rel(telegram_api, telegram_bot, "Delivers user messages", "HTTPS")
 
-' Internal component relationships
-Rel(bot_controller, image_service, "Requests image generation", "Method call")
-Rel(bot_controller, ftp_service, "Uploads to 123RF", "Method call")
-Rel(bot_controller, user_cache, "Stores/retrieves image paths", "Memory access")
-Rel(bot_controller, config_manager, "Reads configuration", "Environment variables")
+' Frontend interfaces to Backend API
+Rel(telegram_bot, api_gateway, "Image generation requests", "REST API")
+Rel(web_interface, api_gateway, "Web API calls", "REST API", "Future")
+Rel(mobile_app, api_gateway, "Mobile API calls", "REST API", "Future")
 
-Rel(image_service, openai_api, "Generates images", "HTTPS/REST API")
-Rel(image_service, download_service, "Downloads images", "Method call")
-Rel(image_service, mock_service, "Gets fallback images", "Method call")
-Rel(image_service, config_manager, "Reads API keys", "Environment variables")
+' API Gateway to Core Services
+Rel(api_gateway, image_service, "Image generation requests", "Service calls")
+Rel(api_gateway, ftp_service, "Upload requests", "Service calls")
+Rel(api_gateway, user_service, "User management", "Service calls")
 
-Rel(ftp_service, ftp_server, "Uploads images", "FTP Protocol")
-Rel(ftp_service, temp_storage, "Reads image files", "File I/O")
-Rel(ftp_service, config_manager, "Reads FTP credentials", "Environment variables")
+' Core Services interactions
+Rel(image_service, openai_api, "Generate images", "HTTPS/REST API")
+Rel(image_service, download_service, "Download images", "Service calls")
+Rel(image_service, mock_service, "Get fallback images", "Service calls")
 
-Rel(download_service, stock_images, "Downloads stock images", "HTTPS")
-Rel(download_service, temp_storage, "Stores/retrieves files", "File I/O")
+Rel(ftp_service, ftp_server, "Upload images", "FTP Protocol")
+Rel(ftp_service, temp_storage, "Read image files", "File I/O")
 
-Rel(mock_service, stock_images, "Provides URLs", "Configuration")
+Rel(download_service, stock_images, "Download stock images", "HTTPS")
+Rel(download_service, temp_storage, "Store/retrieve files", "File I/O")
 
-' OpenAI API responses
-Rel(openai_api, image_service, "Returns image URLs", "HTTPS Response")
+Rel(mock_service, stock_images, "Get fallback URLs", "Configuration")
+
+Rel(user_service, user_cache, "Session management", "Cache access")
+Rel(user_service, database, "User data persistence", "Database queries")
+
+' Configuration access
+Rel(image_service, config_manager, "Read API keys", "Config access")
+Rel(ftp_service, config_manager, "Read FTP credentials", "Config access")
+Rel(api_gateway, config_manager, "Read configuration", "Config access")
+
+' Data layer relationships
+Rel(api_gateway, user_cache, "Session cache", "Cache access")
+Rel(image_service, temp_storage, "Store generated images", "File I/O")
+
+' External API responses
+Rel(openai_api, image_service, "Return image URLs", "HTTPS Response")
 
 ' 123RF Platform interactions
-Rel(ftp_server, web_interface, "Processed images", "Internal transfer")
+Rel(ftp_server, rf_web_interface, "Process uploaded images", "Internal transfer")
 
 SHOW_LEGEND()
 
 note as N1
-  **Key Features:**
-  • Supports DALL-E 3 & DALL-E 2 models
-  • Automatic fallback to stock images
-  • Demo mode for testing
-  • Content policy violation handling
-  • FTP upload to 123RF stock platform
-  • Inline keyboard for user interactions
-  • User image caching for callbacks
-  • Temporary file cleanup (24h interval)
-  • Input validation (max 1000 chars)
+  **Architecture Benefits:**
+  • Modular backend services architecture
+  • Multiple frontend interfaces support
+  • Scalable API Gateway pattern
+  • Centralized user management
+  • Persistent data storage
+  • Session caching for performance
+  • Clear separation of concerns
 end note
 
 note as N2
-  **Deployment:**
-  • Node.js v18+ runtime
-  • Docker containerization
-  • Environment-based configuration
-  • Supports both polling and webhook modes
+  **Current Features:**
+  • DALL-E 3 & 2 image generation
+  • Automatic fallback to stock images
+  • FTP upload to 123RF platform
+  • Demo mode for testing
+  • Content policy violation handling
+  • User session management
+  • Temporary file cleanup
+end note
+
+note as N3
+  **Future Expansion:**
+  • Web interface for browser users
+  • Mobile application
+  • User authentication system
+  • Image history and favorites
+  • Batch processing capabilities
+  • Analytics and reporting
+  • API rate limiting
+end note
+
+note as N4
+  **Deployment Options:**
+  • Microservices with Docker
+  • Kubernetes orchestration
+  • Redis for session caching
+  • PostgreSQL/MongoDB for persistence
+  • Load balancer for API Gateway
+  • Horizontal scaling support
 end note
 
 @enduml
