@@ -85,13 +85,16 @@ test_api_call() {
         
         # Сохранение данных для последующих тестов
         case $test_name in
-            "CREATE_TEST_USER")
+            "CREATE_TEST_USER"|"CREATE_TELEGRAM_USER")
                 if echo "$body" | grep -q '"success":true'; then
                     # Извлечение user ID для последующих тестов
                     if command -v jq &> /dev/null; then
-                        TEST_USER_ID=$(echo "$body" | jq -r '.data.id // empty')
-                        CREATED_USER_IDS+=("$TEST_USER_ID")
-                        log_info "   💾 Сохранен User ID: $TEST_USER_ID"
+                        USER_ID=$(echo "$body" | jq -r '.data.id // empty')
+                        if [ "$test_name" = "CREATE_TEST_USER" ]; then
+                            TEST_USER_ID="$USER_ID"
+                        fi
+                        CREATED_USER_IDS+=("$USER_ID")
+                        log_info "   💾 Сохранен User ID: $USER_ID"
                     fi
                 fi
                 ;;
@@ -120,6 +123,43 @@ wait_for_api() {
     exit 1
 }
 
+# Функция предварительной очистки БД от тестовых пользователей
+cleanup_test_users() {
+    log_info "🧽 Предварительная очистка тестовых пользователей..."
+    
+    # Получаем всех пользователей (включая со статусом 'all')
+    response=$(curl -s "$API_BASE/users?status=all")
+    
+    # Если jq доступен, найдем и удалим всех тестовых пользователей
+    if command -v jq &> /dev/null; then
+        # Извлечь ID пользователей с тестовыми external ID
+        test_user_ids=$(echo "$response" | jq -r '.data.users[]? | select(.externalId | test("^(test_user_|tg_)")) | .id' 2>/dev/null)
+        
+        if [ -n "$test_user_ids" ]; then
+            echo "$test_user_ids" | while read -r user_id; do
+                if [ -n "$user_id" ]; then
+                    # Сначала пометим как удаленного
+                    curl -s -X DELETE "$API_BASE/users/$user_id" > /dev/null 2>&1
+                    # Затем попробуем удалить физически через прямой MongoDB запрос
+                    # Пока что просто покажем, что пользователь помечен как удаленный
+                    log_info "   Помечен как удаленный: $user_id"
+                fi
+            done
+        else
+            log_info "   Тестовые пользователи не найдены"
+        fi
+    fi
+    
+    # Дополнительно попробуем очистить через прямое MongoDB подключение
+    # если mongosh доступен
+    if command -v mongosh &> /dev/null; then
+        log_info "   Физическое удаление тестовых пользователей..."
+        mongosh mongodb://admin:password123@localhost:27017/ai-stock-bot?authSource=admin \
+            --eval 'db.users.deleteMany({externalId: {$regex: /^(test_user_|tg_)/}})' \
+            > /dev/null 2>&1
+    fi
+}
+
 # Функция очистки после тестов
 cleanup() {
     echo
@@ -141,6 +181,9 @@ echo "========================================"
 
 # Ожидание API
 wait_for_api
+
+# Предварительная очистка тестовых пользователей
+cleanup_test_users
 
 # Тест 1: Проверка здоровья API
 test_api_call "HEALTH_CHECK" "GET" "$HEALTH_URL" "" "200" \
@@ -240,13 +283,13 @@ test_api_call "GET_NONEXISTENT_USER" "GET" "$API_BASE/users/external/api/nonexis
 
 # Тест 11: Создание Telegram пользователя
 test_api_call "CREATE_TELEGRAM_USER" "POST" "$API_BASE/users" \
-'{
-  "externalId": "tg_987654321",
-  "externalSystem": "telegram",
-  "username": "telegram_test_user",
-  "firstName": "Alice",
-  "lastName": "Smith"
-}' "201" "Создание Telegram пользователя с минимальными данными"
+"{
+  \"externalId\": \"tg_${UNIQUE_SUFFIX}\",
+  \"externalSystem\": \"telegram\",
+  \"username\": \"telegram_test_user_${UNIQUE_SUFFIX}\",
+  \"firstName\": \"Alice\",
+  \"lastName\": \"Smith\"
+}" "201" "Создание Telegram пользователя с минимальными данными"
 
 # Тест 12: Проверка невалидных данных
 test_api_call "CREATE_INVALID_USER" "POST" "$API_BASE/users" \
