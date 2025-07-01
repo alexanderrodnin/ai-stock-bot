@@ -17,7 +17,12 @@ System_Boundary(telegram_system, "Telegram Platform") {
 }
 
 System_Boundary(backend_system, "AI Stock Bot Backend") {
-    Container(api_gateway, "API Gateway", "Node.js, Express", "REST API for all frontend interfaces")
+    Container_Boundary(api_gateway, "API Gateway - Express.js Application") {
+        Component(api_routes, "API Routes", "Express Router", "Route definitions: /api/images, /api/upload, /api/users")
+        Component(controllers, "Controllers", "Node.js Classes", "Business logic: ImageController, UploadController, UserController")
+        Component(middleware, "Middleware", "Express Middleware", "Auth, validation, error handling, logging")
+        Component(api_config, "API Configuration", "Express Config", "CORS, body parser, rate limiting")
+    }
     
     Container_Boundary(core_services, "Core Services") {
         Component(image_service, "Image Service", "Node.js Class", "Orchestrates image generation with fallback strategies")
@@ -56,13 +61,19 @@ Rel(telegram_bot, telegram_api, "Polls messages, sends images", "HTTPS/Webhook")
 Rel(telegram_api, telegram_bot, "Delivers user messages", "HTTPS")
 
 ' Frontend interfaces to Backend API
-Rel(telegram_bot, api_gateway, "Image generation requests", "REST API")
-Rel(web_interface, api_gateway, "Web API calls", "REST API", "Future")
+Rel(telegram_bot, api_routes, "HTTP requests", "REST API")
+Rel(web_interface, api_routes, "HTTP requests", "REST API", "Future")
 
-' API Gateway to Core Services
-Rel(api_gateway, image_service, "Image generation requests", "Service calls")
-Rel(api_gateway, ftp_service, "Upload requests", "Service calls")
-Rel(api_gateway, user_service, "User management", "Service calls")
+' API Gateway internal flow
+Rel(api_routes, middleware, "Request processing", "Express pipeline")
+Rel(middleware, controllers, "Validated requests", "Function calls")
+Rel(controllers, image_service, "Image generation", "Service calls")
+Rel(controllers, ftp_service, "Upload requests", "Service calls")
+Rel(controllers, user_service, "User operations", "Service calls")
+
+' API Configuration
+Rel(api_routes, api_config, "Uses configuration", "Config access")
+Rel(middleware, api_config, "CORS, rate limits", "Config access")
 
 ' Core Services interactions
 Rel(image_service, openai_api, "Generate images", "HTTPS/REST API")
@@ -82,7 +93,8 @@ Rel(user_service, database, "User data persistence", "Database queries")
 ' Configuration access
 Rel(image_service, config_manager, "Read API keys", "Config access")
 Rel(ftp_service, config_manager, "Read FTP credentials", "Config access")
-Rel(api_gateway, config_manager, "Read configuration", "Config access")
+Rel(api_config, config_manager, "Read API configuration", "Config access")
+Rel(controllers, config_manager, "Read app settings", "Config access")
 
 ' Data layer relationships
 Rel(image_service, temp_storage, "Store generated images", "File I/O")
@@ -107,14 +119,25 @@ note as N1
 end note
 
 note as N2
-  **Current Features:**
-  • DALL-E 3 & 2 image generation
-  • Automatic fallback to stock images
-  • FTP upload to 123RF platform
-  • Demo mode for testing
-  • Content policy violation handling
-  • User session management
-  • Temporary file cleanup
+  **Backend API Features:**
+  • RESTful API design
+  • Express.js routing system
+  • Request validation middleware
+  • Error handling & logging
+  • CORS configuration
+  • Rate limiting protection
+  • Health check endpoints
+  • Modular controller architecture
+end note
+
+note as N5
+  **API Endpoints:**
+  • POST /api/images/generate
+  • POST /api/upload/123rf
+  • GET/POST /api/users
+  • GET /api/images/:userId
+  • GET /api/health
+  • Error responses with codes
 end note
 
 note as N3
