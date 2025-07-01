@@ -90,7 +90,7 @@ API будет доступен по адресу: `http://localhost:3000`
 
 ### Структура проекта
 ```
-backend-api/
+backend/
 ├── src/
 │   ├── app.js              # Express приложение
 │   ├── server.js           # HTTP сервер

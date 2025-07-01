@@ -1,5 +1,5 @@
 {
-  "name": "ai-stock-bot-backend-api",
+  "name": "ai-stock-bot-backend",
   "version": "1.0.0",
   "description": "Backend API for AI Stock Bot - Image generation and 123RF upload service",
   "main": "src/server.js",
