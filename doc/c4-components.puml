@@ -30,7 +30,7 @@ System_Boundary(backend_system, "AI Stock Bot Backend") {
     
     Container_Boundary(data_layer, "Data Layer") {
         ComponentDb(temp_storage, "Temporary File Storage", "Local Filesystem", "Stores downloaded images temporarily")
-        ComponentDb(database, "Database", "PostgreSQL/MongoDB", "Persistent user data and image metadata")
+        ComponentDb(database, "Database", "MongoDB", "Persistent user data and image metadata")
     }
 }
 
@@ -131,7 +131,7 @@ note as N4
   **Deployment Options:**
   • Microservices with Docker
   • Kubernetes orchestration
-  • PostgreSQL/MongoDB for persistence
+  • MongoDB for persistence
   • Load balancer for API Gateway
   • Horizontal scaling support
   • Simple deployment without caching layer
