@@ -1,0 +1,50 @@
+{
+  "name": "ai-stock-bot-backend-api",
+  "version": "1.0.0",
+  "description": "Backend API for AI Stock Bot - Image generation and 123RF upload service",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "nodemon src/server.js",
+    "test": "jest",
+    "lint": "eslint src/",
+    "docker:build": "docker build -t ai-stock-bot-api .",
+    "docker:run": "docker run -p 3000:3000 --env-file .env ai-stock-bot-api"
+  },
+  "keywords": [
+    "api",
+    "express",
+    "openai",
+    "dalle",
+    "stock-images",
+    "123rf",
+    "image-generation"
+  ],
+  "author": "AI Stock Bot Team",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "mongoose": "^8.0.3",
+    "dotenv": "^16.3.1",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5",
+    "joi": "^17.11.0",
+    "axios": "^1.6.2",
+    "basic-ftp": "^5.0.3",
+    "uuid": "^9.0.1",
+    "compression": "^1.7.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "eslint": "^8.55.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
