@@ -13,7 +13,7 @@ services:
     environment:
       - NODE_ENV=development
       - PORT=3000
-      - MONGODB_URI=mongodb://mongodb:27017/ai-stock-bot
+      - MONGODB_URI=mongodb://admin:password123@mongodb:27017/ai-stock-bot?authSource=admin
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - FTP_HOST=${FTP_HOST}
       - FTP_USER=${FTP_USER}

@@ -1,4 +1,20 @@
 services:
+  # MongoDB Database Service for backend testing
+  mongodb:
+    image: mongo:7.0.5
+    container_name: ai-stock-bot-mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=admin
+      - MONGO_INITDB_ROOT_PASSWORD=password123
+      - MONGO_INITDB_DATABASE=ai-stock-bot
+    volumes:
+      # Persist MongoDB data
+      - mongodb_data:/data/db
+    restart: unless-stopped
+    command: mongod --bind_ip_all
+
   tg-bot:
     build:
       context: .
@@ -14,3 +30,11 @@ services:
       - FTP_REMOTE_DIR=${FTP_REMOTE_DIR}
       # Uncomment to run in demo mode
       # - DEMO_MODE=true
+    profiles:
+      - bot
+
+# Named volumes for data persistence
+volumes:
+  mongodb_data:
+    driver: local
+    name: ai-stock-bot-mongodb-data
