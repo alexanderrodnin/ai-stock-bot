@@ -30,7 +30,6 @@ System_Boundary(backend_system, "AI Stock Bot Backend") {
     
     Container_Boundary(data_layer, "Data Layer") {
         ComponentDb(temp_storage, "Temporary File Storage", "Local Filesystem", "Stores downloaded images temporarily")
-        ComponentDb(user_cache, "User Session Cache", "Redis/Memory", "Caches user sessions and image paths")
         ComponentDb(database, "Database", "PostgreSQL/MongoDB", "Persistent user data and image metadata")
     }
 }
@@ -78,7 +77,6 @@ Rel(download_service, temp_storage, "Store/retrieve files", "File I/O")
 
 Rel(mock_service, stock_images, "Get fallback URLs", "Configuration")
 
-Rel(user_service, user_cache, "Session management", "Cache access")
 Rel(user_service, database, "User data persistence", "Database queries")
 
 ' Configuration access
@@ -87,7 +85,6 @@ Rel(ftp_service, config_manager, "Read FTP credentials", "Config access")
 Rel(api_gateway, config_manager, "Read configuration", "Config access")
 
 ' Data layer relationships
-Rel(api_gateway, user_cache, "Session cache", "Cache access")
 Rel(image_service, temp_storage, "Store generated images", "File I/O")
 
 ' External API responses
@@ -105,8 +102,8 @@ note as N1
   • Scalable API Gateway pattern
   • Centralized user management
   • Persistent data storage
-  • Session caching for performance
   • Clear separation of concerns
+  • Simplified architecture
 end note
 
 note as N2
@@ -134,10 +131,10 @@ note as N4
   **Deployment Options:**
   • Microservices with Docker
   • Kubernetes orchestration
-  • Redis for session caching
   • PostgreSQL/MongoDB for persistence
   • Load balancer for API Gateway
   • Horizontal scaling support
+  • Simple deployment without caching layer
 end note
 
 @enduml
