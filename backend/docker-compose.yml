@@ -18,6 +18,7 @@ services:
       - FTP_HOST=${FTP_HOST}
       - FTP_USER=${FTP_USER}
       - FTP_PASSWORD=${FTP_PASSWORD}
+      - FTP_REMOTE_PATH=${FTP_REMOTE_PATH}
       - RATE_LIMIT_WINDOW=900000
       - RATE_LIMIT_MAX=100
       - ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001

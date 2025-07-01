@@ -6,6 +6,7 @@
 const { validationResult } = require('express-validator');
 const logger = require('../utils/logger');
 const { AppError } = require('../middleware/errorHandler');
+const ftpService = require('../services/ftpService');
 
 class UploadController {
   
@@ -31,29 +32,51 @@ class UploadController {
     logger.info('123RF upload request', { imageId, userId, title });
 
     try {
-      // TODO: Implement actual FTP upload using FtpService
-      
+      // Generate upload ID
       const uploadId = `upload_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       
-      const mockResponse = {
+      // TODO: Get actual image path from imageId (from database or storage)
+      // For now, assuming image path is provided or we have a temp file
+      const imagePath = req.body.imagePath || `./temp/${imageId}.jpg`;
+      
+      // Prepare metadata for 123RF upload
+      const metadata = {
+        title: title || 'AI Generated Image',
+        description: description || 'Generated using AI technology',
+        keywords: keywords || ['ai', 'generated', 'digital art']
+      };
+
+      // Upload to 123RF via FTP (uploads to /ai_image folder)
+      const uploadResult = await ftpService.uploadImage(imagePath, metadata);
+      
+      const response = {
         success: true,
         data: {
           uploadId,
           imageId,
           userId,
-          title: title || 'AI Generated Image',
+          title: metadata.title,
           status: 'uploaded',
-          uploadedAt: new Date().toISOString(),
-          ftpPath: `/uploads/${uploadId}.jpg`
+          uploadedAt: uploadResult.timestamp,
+          ftpPath: `${uploadResult.remotePath}/${uploadResult.remoteFile}`,
+          fileSize: uploadResult.fileSize,
+          uploadTime: uploadResult.uploadTime,
+          metadata
         }
       };
 
-      logger.info('Image uploaded to 123RF successfully', { uploadId, imageId });
-      res.status(201).json(mockResponse);
+      logger.info('Image uploaded to 123RF successfully', { 
+        uploadId, 
+        imageId, 
+        remoteFile: uploadResult.remoteFile,
+        remotePath: uploadResult.remotePath
+      });
+      
+      res.status(201).json(response);
 
     } catch (error) {
       logger.error('123RF upload failed', { error: error.message, imageId });
-      throw new AppError('Failed to upload to 123RF', 500, 'UPLOAD_FAILED');
+      throw new AppError(`Failed to upload to 123RF: ${error.message}`, 500, 'UPLOAD_FAILED');
     }
   }
 

@@ -36,6 +36,7 @@ const config = {
     port: parseInt(process.env.FTP_PORT) || 21,
     user: process.env.FTP_USER,
     password: process.env.FTP_PASSWORD,
+    remotePath: process.env.FTP_REMOTE_PATH || '/ai_image',
     secure: process.env.FTP_SECURE === 'true',
     timeout: parseInt(process.env.FTP_TIMEOUT) || 30000
   },
