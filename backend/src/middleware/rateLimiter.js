@@ -95,17 +95,20 @@ const uploadLimiter = rateLimit({
 });
 
 // Create account rate limiter (prevent spam account creation)
+// Use more relaxed limits for development and testing
 const createAccountLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5, // 5 account creations per hour per IP
+  windowMs: config.nodeEnv === 'production' ? 60 * 60 * 1000 : 60 * 1000, // 1 hour in production, 1 minute in dev/test
+  max: config.nodeEnv === 'production' ? 5 : 50, // 5 per hour in production, 50 per minute in dev/test
   standardHeaders: true,
   legacyHeaders: false,
   
   message: {
     error: 'Account creation rate limit exceeded',
-    message: 'Too many accounts created from this IP. Please try again in 1 hour.',
+    message: config.nodeEnv === 'production' 
+      ? 'Too many accounts created from this IP. Please try again in 1 hour.'
+      : 'Too many accounts created from this IP. Please try again in 1 minute.',
     code: 'ACCOUNT_CREATION_LIMIT_EXCEEDED',
-    retryAfter: 3600
+    retryAfter: config.nodeEnv === 'production' ? 3600 : 60
   }
 });
 
