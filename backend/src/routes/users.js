@@ -93,6 +93,11 @@ const validateUserUpdate = [
     .withMessage('Preferences must be an object')
 ];
 
+// GET /api/users - Get all users with pagination
+router.get('/',
+  asyncHandler(userController.getAllUsers)
+);
+
 // POST /api/users - Create new user
 router.post('/',
   createAccountLimiter,
@@ -100,17 +105,23 @@ router.post('/',
   asyncHandler(userController.createUser)
 );
 
-// GET /api/users/:id - Get user by ID
-router.get('/:id',
-  param('id').isMongoId().withMessage('Invalid user ID'),
-  asyncHandler(userController.getUserById)
-);
-
-// GET /api/users/external/:externalSystem/:externalId - Get user by External ID
+// GET /api/users/external/:externalSystem/:externalId - Get user by External ID (must be before /:id)
 router.get('/external/:externalSystem/:externalId',
   param('externalSystem').isString().isIn(['telegram', 'web', 'mobile', 'api', 'other']).withMessage('Invalid external system'),
   param('externalId').isString().withMessage('Invalid external ID'),
   asyncHandler(userController.getUserByExternalId)
+);
+
+// GET /api/users/:id/stats - Get user statistics (must be before /:id)
+router.get('/:id/stats',
+  param('id').isMongoId().withMessage('Invalid user ID'),
+  asyncHandler(userController.getUserStats)
+);
+
+// GET /api/users/:id - Get user by ID
+router.get('/:id',
+  param('id').isMongoId().withMessage('Invalid user ID'),
+  asyncHandler(userController.getUserById)
 );
 
 // PUT /api/users/:id - Update user
@@ -123,12 +134,6 @@ router.put('/:id',
 router.delete('/:id',
   param('id').isMongoId().withMessage('Invalid user ID'),
   asyncHandler(userController.deleteUser)
-);
-
-// GET /api/users/:id/stats - Get user statistics
-router.get('/:id/stats',
-  param('id').isMongoId().withMessage('Invalid user ID'),
-  asyncHandler(userController.getUserStats)
 );
 
 module.exports = router;

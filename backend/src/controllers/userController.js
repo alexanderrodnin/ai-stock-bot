@@ -11,6 +11,52 @@ const User = require('../models/User');
 class UserController {
   
   /**
+   * Get all users with pagination
+   * GET /api/users
+   */
+  async getAllUsers(req, res) {
+    const { page = 1, limit = 10, status = 'active' } = req.query;
+    
+    logger.info('Get all users request', { page, limit, status });
+
+    try {
+      const skip = (parseInt(page) - 1) * parseInt(limit);
+      const query = status !== 'all' ? { status } : { status: { $ne: 'deleted' } };
+      
+      const users = await User.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parseInt(limit));
+      
+      const total = await User.countDocuments(query);
+      
+      logger.info('Users retrieved successfully', { 
+        count: users.length, 
+        total, 
+        page, 
+        limit 
+      });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          users: users.map(user => user.toSafeObject()),
+          pagination: {
+            page: parseInt(page),
+            limit: parseInt(limit),
+            total,
+            totalPages: Math.ceil(total / parseInt(limit))
+          }
+        }
+      });
+
+    } catch (error) {
+      logger.error('Failed to get all users', { error: error.message });
+      throw new AppError('Failed to retrieve users', 500, 'USERS_RETRIEVAL_FAILED');
+    }
+  }
+
+  /**
    * Create new user
    * POST /api/users
    */
