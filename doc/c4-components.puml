@@ -10,7 +10,6 @@ Person(user, "User", "End user requesting image generation")
 System_Boundary(frontend_interfaces, "Frontend Interfaces") {
     Container(telegram_bot, "Telegram Bot", "Node.js, node-telegram-bot-api", "Telegram interface for image generation and 123RF upload")
     Container(web_interface, "Web Interface", "Future", "Web-based interface for image generation")
-    Container(mobile_app, "Mobile App", "Future", "Mobile application interface")
 }
 
 System_Boundary(telegram_system, "Telegram Platform") {
@@ -52,7 +51,6 @@ System_Boundary(stock_platform, "123RF Platform") {
 ' User interactions with frontend interfaces
 Rel(user, telegram_bot, "Sends prompts, receives images", "Telegram Messages")
 Rel(user, web_interface, "Web requests", "HTTPS", "Future")
-Rel(user, mobile_app, "Mobile requests", "HTTPS", "Future")
 
 ' Frontend to Telegram Platform
 Rel(telegram_bot, telegram_api, "Polls messages, sends images", "HTTPS/Webhook")
@@ -61,7 +59,6 @@ Rel(telegram_api, telegram_bot, "Delivers user messages", "HTTPS")
 ' Frontend interfaces to Backend API
 Rel(telegram_bot, api_gateway, "Image generation requests", "REST API")
 Rel(web_interface, api_gateway, "Web API calls", "REST API", "Future")
-Rel(mobile_app, api_gateway, "Mobile API calls", "REST API", "Future")
 
 ' API Gateway to Core Services
 Rel(api_gateway, image_service, "Image generation requests", "Service calls")
@@ -126,7 +123,6 @@ end note
 note as N3
   **Future Expansion:**
   • Web interface for browser users
-  • Mobile application
   • User authentication system
   • Image history and favorites
   • Batch processing capabilities
