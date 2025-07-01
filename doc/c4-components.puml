@@ -1,0 +1,98 @@
+@startuml C4_Components
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Component Diagram for AI Stock Bot - Telegram Image Generation Bot
+
+Person(user, "Telegram User", "End user requesting image generation")
+
+System_Boundary(telegram_system, "Telegram Platform") {
+    Container(telegram_api, "Telegram Bot API", "REST API", "Handles bot communication, message delivery")
+}
+
+System_Boundary(openai_system, "OpenAI Platform") {
+    Container(openai_api, "OpenAI Images API", "REST API", "DALL-E 3/2 image generation service")
+}
+
+System_Boundary(bot_system, "AI Stock Bot Application") {
+    Container_Boundary(nodejs_app, "Node.js Application") {
+        Component(bot_controller, "Bot Controller", "Node.js, node-telegram-bot-api", "Main bot logic, command handling, message processing, callback queries")
+        Component(image_service, "Image Service", "Node.js Class", "Orchestrates image generation with fallback strategies")
+        Component(ftp_service, "FTP Service", "Node.js Class, basic-ftp", "Uploads images to 123RF via FTP")
+        Component(download_service, "Download Service", "Node.js Module", "Downloads and manages temporary image files")
+        Component(mock_service, "Mock Image Service", "Node.js Module", "Provides fallback stock images")
+        Component(config_manager, "Configuration Manager", "dotenv", "Manages environment variables and API keys")
+        
+        ComponentDb(temp_storage, "Temporary File Storage", "Local Filesystem", "Stores downloaded images temporarily")
+        ComponentDb(user_cache, "User Image Cache", "In-Memory Map", "Caches image paths for user callbacks")
+    }
+}
+
+System_Boundary(external_images, "External Image Sources") {
+    Container(stock_images, "Stock Image APIs", "HTTP APIs", "Fallback image sources for demo/error cases")
+}
+
+System_Boundary(stock_platform, "123RF Platform") {
+    Container(ftp_server, "123RF FTP Server", "FTP Server", "Receives uploaded images for stock marketplace")
+    Container(web_interface, "123RF Web Interface", "Web Platform", "Content management and review interface")
+}
+
+' User interactions
+Rel(user, telegram_api, "Sends text prompts", "HTTPS")
+Rel(telegram_api, user, "Receives generated images", "HTTPS")
+
+' Bot to Telegram API
+Rel(bot_controller, telegram_api, "Polls for messages, sends images", "HTTPS/Webhook")
+Rel(telegram_api, bot_controller, "Delivers user messages", "HTTPS")
+
+' Internal component relationships
+Rel(bot_controller, image_service, "Requests image generation", "Method call")
+Rel(bot_controller, ftp_service, "Uploads to 123RF", "Method call")
+Rel(bot_controller, user_cache, "Stores/retrieves image paths", "Memory access")
+Rel(bot_controller, config_manager, "Reads configuration", "Environment variables")
+
+Rel(image_service, openai_api, "Generates images", "HTTPS/REST API")
+Rel(image_service, download_service, "Downloads images", "Method call")
+Rel(image_service, mock_service, "Gets fallback images", "Method call")
+Rel(image_service, config_manager, "Reads API keys", "Environment variables")
+
+Rel(ftp_service, ftp_server, "Uploads images", "FTP Protocol")
+Rel(ftp_service, temp_storage, "Reads image files", "File I/O")
+Rel(ftp_service, config_manager, "Reads FTP credentials", "Environment variables")
+
+Rel(download_service, stock_images, "Downloads stock images", "HTTPS")
+Rel(download_service, temp_storage, "Stores/retrieves files", "File I/O")
+
+Rel(mock_service, stock_images, "Provides URLs", "Configuration")
+
+' OpenAI API responses
+Rel(openai_api, image_service, "Returns image URLs", "HTTPS Response")
+
+' 123RF Platform interactions
+Rel(ftp_server, web_interface, "Processed images", "Internal transfer")
+
+SHOW_LEGEND()
+
+note as N1
+  **Key Features:**
+  • Supports DALL-E 3 & DALL-E 2 models
+  • Automatic fallback to stock images
+  • Demo mode for testing
+  • Content policy violation handling
+  • FTP upload to 123RF stock platform
+  • Inline keyboard for user interactions
+  • User image caching for callbacks
+  • Temporary file cleanup (24h interval)
+  • Input validation (max 1000 chars)
+end note
+
+note as N2
+  **Deployment:**
+  • Node.js v18+ runtime
+  • Docker containerization
+  • Environment-based configuration
+  • Supports both polling and webhook modes
+end note
+
+@enduml
