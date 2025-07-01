@@ -14,7 +14,7 @@ class UserController {
    * Create new user
    * POST /api/users
    */
-  async createUser(req, res) {
+  async createUser(req, res, next) {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -97,12 +97,15 @@ class UserController {
         throw new AppError('User already exists', 409, 'USER_ALREADY_EXISTS');
       }
       
-      logger.error('User creation failed', { 
-        error: error.message, 
+      logger.error('User creation failed - detailed error', { 
+        error: error.message,
+        stack: error.stack,
+        name: error.name,
+        code: error.code,
         externalId, 
         externalSystem 
       });
-      throw new AppError('Failed to create user', 500, 'USER_CREATION_FAILED');
+      throw new AppError(`Failed to create user: ${error.message}`, 500, 'USER_CREATION_FAILED');
     }
   }
 

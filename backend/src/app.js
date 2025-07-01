@@ -11,7 +11,7 @@ const morgan = require('morgan');
 
 const config = require('./config/config');
 const apiRoutes = require('./routes');
-const errorHandler = require('./middleware/errorHandler');
+const { errorHandler } = require('./middleware/errorHandler');
 const { defaultLimiter } = require('./middleware/rateLimiter');
 const logger = require('./utils/logger');
 

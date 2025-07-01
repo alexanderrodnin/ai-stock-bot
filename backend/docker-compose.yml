@@ -54,7 +54,7 @@ services:
     networks:
       - ai-stock-bot-network
     restart: unless-stopped
-    command: mongod --auth --bind_ip_all
+    command: mongod --bind_ip_all
 
   # MongoDB Express (Web UI for MongoDB)
   mongo-express:
