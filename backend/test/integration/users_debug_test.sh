@@ -109,14 +109,14 @@ wait_for_api() {
     
     for i in {1..30}; do
         if curl -s "$HEALTH_URL" > /dev/null 2>&1; then
-            log_success "API готов!"
+            echo -e "${GREEN}[PASS]${NC} API готов!"
             return 0
         fi
         log_info "   Попытка $i/30 - API еще не готов, ожидание..."
         sleep 2
     done
     
-    log_error "API не запустился в течение 60 секунд"
+    echo -e "${RED}[FAIL]${NC} API не запустился в течение 60 секунд"
     exit 1
 }
 
