@@ -4,7 +4,7 @@
  */
 
 const express = require('express');
-const { body } = require('express-validator');
+const { body, param, query } = require('express-validator');
 const imageController = require('../controllers/imageController');
 const { imageGenerationLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../middleware/errorHandler');
@@ -15,13 +15,23 @@ const router = express.Router();
 const validateImageGeneration = [
   body('prompt')
     .isString()
-    .isLength({ min: 1, max: 1000 })
-    .withMessage('Prompt must be between 1 and 1000 characters'),
+    .isLength({ min: 1, max: 4000 })
+    .withMessage('Prompt must be between 1 and 4000 characters'),
   
   body('userId')
     .isString()
     .isLength({ min: 1 })
     .withMessage('User ID is required'),
+
+  body('userExternalId')
+    .isString()
+    .isLength({ min: 1 })
+    .withMessage('User external ID is required'),
+  
+  body('userExternalSystem')
+    .optional()
+    .isIn(['telegram', 'web', 'mobile', 'api', 'other'])
+    .withMessage('Invalid external system'),
   
   body('model')
     .optional()
@@ -30,8 +40,8 @@ const validateImageGeneration = [
   
   body('size')
     .optional()
-    .isIn(['1024x1024', '1792x1024', '1024x1792'])
-    .withMessage('Size must be 1024x1024, 1792x1024, or 1024x1792'),
+    .isIn(['256x256', '512x512', '1024x1024', '1792x1024', '1024x1792'])
+    .withMessage('Invalid image size'),
   
   body('quality')
     .optional()
@@ -44,26 +54,226 @@ const validateImageGeneration = [
     .withMessage('Style must be vivid or natural')
 ];
 
-// POST /api/images/generate - Generate new image
+const validateImageMetadata = [
+  body('userId')
+    .isString()
+    .isLength({ min: 1 })
+    .withMessage('User ID is required'),
+  
+  body('title')
+    .optional()
+    .isString()
+    .isLength({ max: 200 })
+    .withMessage('Title must be less than 200 characters'),
+  
+  body('description')
+    .optional()
+    .isString()
+    .isLength({ max: 2000 })
+    .withMessage('Description must be less than 2000 characters'),
+  
+  body('keywords')
+    .optional()
+    .isArray()
+    .withMessage('Keywords must be an array'),
+  
+  body('category')
+    .optional()
+    .isString()
+    .isLength({ max: 100 })
+    .withMessage('Category must be less than 100 characters')
+];
+
+const validateUploadSettings = [
+  body('userId')
+    .isString()
+    .isLength({ min: 1 })
+    .withMessage('User ID is required'),
+  
+  body('settings')
+    .optional()
+    .isObject()
+    .withMessage('Settings must be an object')
+];
+
+/**
+ * @route   POST /api/images/generate
+ * @desc    Generate a new image using AI
+ * @access  Public
+ */
 router.post('/generate', 
   imageGenerationLimiter,
   validateImageGeneration,
   asyncHandler(imageController.generateImage)
 );
 
-// GET /api/images/:userId - Get user's image history
-router.get('/:userId', 
-  asyncHandler(imageController.getUserImages)
-);
+/**
+ * @route   GET /api/images/user/:userId
+ * @desc    Get user's image history
+ * @access  Public
+ */
+router.get('/user/:userId', [
+  param('userId')
+    .isMongoId()
+    .withMessage('Invalid user ID format'),
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer'),
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100'),
+  query('status')
+    .optional()
+    .isIn(['active', 'archived', 'deleted'])
+    .withMessage('Invalid status'),
+  query('sortBy')
+    .optional()
+    .isIn(['createdAt', 'updatedAt', 'views', 'downloads'])
+    .withMessage('Invalid sort field'),
+  query('sortOrder')
+    .optional()
+    .isIn(['asc', 'desc'])
+    .withMessage('Sort order must be asc or desc')
+], asyncHandler(imageController.getUserImages));
 
-// GET /api/images/:userId/:imageId - Get specific image details
-router.get('/:userId/:imageId',
-  asyncHandler(imageController.getImageById)
-);
+/**
+ * @route   GET /api/images/external/:externalId/:externalSystem
+ * @desc    Get images by external user ID
+ * @access  Public
+ */
+router.get('/external/:externalId/:externalSystem', [
+  param('externalId')
+    .isString()
+    .isLength({ min: 1 })
+    .withMessage('External ID is required'),
+  param('externalSystem')
+    .isIn(['telegram', 'web', 'mobile', 'api', 'other'])
+    .withMessage('Invalid external system'),
+  query('page')
+    .optional()
+    .isInt({ min: 1 })
+    .withMessage('Page must be a positive integer'),
+  query('limit')
+    .optional()
+    .isInt({ min: 1, max: 100 })
+    .withMessage('Limit must be between 1 and 100')
+], asyncHandler(imageController.getImagesByExternalUser));
 
-// DELETE /api/images/:userId/:imageId - Delete image
-router.delete('/:userId/:imageId',
-  asyncHandler(imageController.deleteImage)
-);
+/**
+ * @route   GET /api/images/:imageId
+ * @desc    Get specific image by ID
+ * @access  Public
+ */
+router.get('/:imageId', [
+  param('imageId')
+    .isMongoId()
+    .withMessage('Invalid image ID format'),
+  query('userId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid user ID format')
+], asyncHandler(imageController.getImageById));
+
+/**
+ * @route   GET /api/images/:imageId/file
+ * @desc    Serve image file
+ * @access  Public
+ */
+router.get('/:imageId/file', [
+  param('imageId')
+    .isMongoId()
+    .withMessage('Invalid image ID format'),
+  query('userId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid user ID format')
+], asyncHandler(imageController.serveImageFile));
+
+/**
+ * @route   GET /api/images/:imageId/thumbnail
+ * @desc    Serve image thumbnail
+ * @access  Public
+ */
+router.get('/:imageId/thumbnail', [
+  param('imageId')
+    .isMongoId()
+    .withMessage('Invalid image ID format')
+], asyncHandler(imageController.serveImageThumbnail));
+
+/**
+ * @route   PUT /api/images/:imageId/metadata
+ * @desc    Update image metadata
+ * @access  Public
+ */
+router.put('/:imageId/metadata', [
+  param('imageId')
+    .isMongoId()
+    .withMessage('Invalid image ID format'),
+  ...validateImageMetadata
+], asyncHandler(imageController.updateImageMetadata));
+
+/**
+ * @route   DELETE /api/images/:imageId
+ * @desc    Delete image
+ * @access  Public
+ */
+router.delete('/:imageId', [
+  param('imageId')
+    .isMongoId()
+    .withMessage('Invalid image ID format'),
+  body('userId')
+    .isString()
+    .isLength({ min: 1 })
+    .withMessage('User ID is required')
+], asyncHandler(imageController.deleteImage));
+
+/**
+ * @route   POST /api/images/:imageId/upload/:service
+ * @desc    Upload image to stock service
+ * @access  Public
+ */
+router.post('/:imageId/upload/:service', [
+  param('imageId')
+    .isMongoId()
+    .withMessage('Invalid image ID format'),
+  param('service')
+    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .withMessage('Invalid stock service'),
+  ...validateUploadSettings
+], asyncHandler(imageController.uploadToStockService));
+
+/**
+ * @route   GET /api/images/:imageId/uploads
+ * @desc    Get upload status for image
+ * @access  Public
+ */
+router.get('/:imageId/uploads', [
+  param('imageId')
+    .isMongoId()
+    .withMessage('Invalid image ID format'),
+  query('userId')
+    .isMongoId()
+    .withMessage('User ID is required')
+], asyncHandler(imageController.getUploadStatus));
+
+/**
+ * @route   POST /api/images/:imageId/retry/:service
+ * @desc    Retry failed upload
+ * @access  Public
+ */
+router.post('/:imageId/retry/:service', [
+  param('imageId')
+    .isMongoId()
+    .withMessage('Invalid image ID format'),
+  param('service')
+    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .withMessage('Invalid stock service'),
+  body('userId')
+    .isString()
+    .isLength({ min: 1 })
+    .withMessage('User ID is required')
+], asyncHandler(imageController.retryUpload));
 
 module.exports = router;

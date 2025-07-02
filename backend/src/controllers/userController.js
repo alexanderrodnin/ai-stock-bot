@@ -1,66 +1,23 @@
 /**
  * User Controller
- * Handles user management requests
+ * Handles user management and profile operations
  */
 
 const { validationResult } = require('express-validator');
+const User = require('../models/User');
+const Image = require('../models/Image');
+const stockUploadService = require('../services/stockUploadService');
 const logger = require('../utils/logger');
 const { AppError } = require('../middleware/errorHandler');
-const User = require('../models/User');
 
 class UserController {
-  
-  /**
-   * Get all users with pagination
-   * GET /api/users
-   */
-  async getAllUsers(req, res) {
-    const { page = 1, limit = 10, status = 'active' } = req.query;
-    
-    logger.info('Get all users request', { page, limit, status });
-
-    try {
-      const skip = (parseInt(page) - 1) * parseInt(limit);
-      const query = status !== 'all' ? { status } : { status: { $ne: 'deleted' } };
-      
-      const users = await User.find(query)
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit));
-      
-      const total = await User.countDocuments(query);
-      
-      logger.info('Users retrieved successfully', { 
-        count: users.length, 
-        total, 
-        page, 
-        limit 
-      });
-
-      res.status(200).json({
-        success: true,
-        data: {
-          users: users.map(user => user.toSafeObject()),
-          pagination: {
-            page: parseInt(page),
-            limit: parseInt(limit),
-            total,
-            totalPages: Math.ceil(total / parseInt(limit))
-          }
-        }
-      });
-
-    } catch (error) {
-      logger.error('Failed to get all users', { error: error.message });
-      throw new AppError('Failed to retrieve users', 500, 'USERS_RETRIEVAL_FAILED');
-    }
-  }
 
   /**
-   * Create new user
+   * Create or get user
    * POST /api/users
    */
-  async createUser(req, res, next) {
+  async createOrGetUser(req, res) {
+    // Check validation errors
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
       return res.status(400).json({
@@ -73,117 +30,111 @@ class UserController {
       });
     }
 
-    const { 
-      externalId, 
+    const {
+      externalId,
       externalSystem = 'api',
-      username, 
-      firstName, 
-      lastName, 
-      email, 
-      preferences,
-      metadata 
+      profile = {},
+      preferences = {},
+      metadata = {}
     } = req.body;
 
-    logger.info('Create user request', { externalId, externalSystem, username });
+    logger.info('Create or get user request', {
+      externalId,
+      externalSystem,
+      profile: { ...profile, email: profile.email ? '[REDACTED]' : undefined }
+    });
 
     try {
-      // Check if user already exists
-      const existingUser = await User.findByExternalId(externalId, externalSystem);
-      if (existingUser) {
-        logger.warn('User already exists', { externalId, externalSystem });
-        return res.status(409).json({
-          success: false,
-          error: {
-            message: 'User already exists',
-            code: 'USER_ALREADY_EXISTS'
-          }
+      // Try to find existing user
+      let user = await User.findByExternalId(externalId, externalSystem);
+
+      if (user) {
+        // Update last activity and metadata
+        user.stats.lastActivity = new Date();
+        if (metadata.ipAddress) user.metadata.ipAddress = metadata.ipAddress;
+        if (metadata.userAgent) user.metadata.userAgent = metadata.userAgent;
+        if (metadata.referrer) user.metadata.referrer = metadata.referrer;
+        
+        await user.save();
+
+        logger.info('Existing user found and updated', {
+          userId: user.id,
+          externalId,
+          externalSystem
+        });
+
+        return res.status(200).json({
+          success: true,
+          data: user.toSafeObject(),
+          message: 'User retrieved successfully'
         });
       }
 
       // Create new user
-      const userData = {
+      user = new User({
         externalId,
         externalSystem,
-        profile: {
-          username,
-          firstName,
-          lastName,
-          email
+        profile,
+        preferences,
+        metadata,
+        stats: {
+          lastActivity: new Date()
         }
-      };
+      });
 
-      // Add preferences if provided
-      if (preferences) {
-        userData.preferences = preferences;
-      }
-
-      // Add metadata if provided
-      if (metadata) {
-        userData.metadata = metadata;
-      }
-
-      const user = new User(userData);
       await user.save();
 
-      logger.info('User created successfully', { 
-        userId: user.id, 
-        externalId, 
-        externalSystem 
+      logger.info('New user created', {
+        userId: user.id,
+        externalId,
+        externalSystem
       });
 
       res.status(201).json({
         success: true,
-        data: user.toSafeObject()
+        data: user.toSafeObject(),
+        message: 'User created successfully'
       });
 
     } catch (error) {
-      if (error.code === 11000) {
-        // Duplicate key error
-        logger.error('Duplicate user creation attempt', { externalId, externalSystem });
-        throw new AppError('User already exists', 409, 'USER_ALREADY_EXISTS');
-      }
-      
-      logger.error('User creation failed - detailed error', { 
+      logger.error('Failed to create or get user', {
         error: error.message,
-        stack: error.stack,
-        name: error.name,
-        code: error.code,
-        externalId, 
-        externalSystem 
+        externalId,
+        externalSystem
       });
-      throw new AppError(`Failed to create user: ${error.message}`, 500, 'USER_CREATION_FAILED');
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to create or retrieve user',
+          code: 'USER_OPERATION_FAILED',
+          details: error.message
+        }
+      });
     }
   }
 
   /**
    * Get user by ID
-   * GET /api/users/:id
+   * GET /api/users/:userId
    */
   async getUserById(req, res) {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
-        success: false,
-        error: {
-          message: 'Validation failed',
-          code: 'VALIDATION_ERROR',
-          details: errors.array()
-        }
-      });
-    }
+    const { userId } = req.params;
 
-    const { id } = req.params;
-    logger.info('Get user by ID request', { userId: id });
+    logger.info('Get user by ID request', { userId });
 
     try {
-      const user = await User.findById(id);
-      
-      if (!user || user.status === 'deleted') {
-        logger.warn('User not found', { userId: id });
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
-      }
+      const user = await User.findById(userId);
 
-      logger.info('User retrieved successfully', { userId: id });
+      if (!user || user.status === 'deleted') {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
+      }
 
       res.status(200).json({
         success: true,
@@ -191,42 +142,43 @@ class UserController {
       });
 
     } catch (error) {
-      if (error.name === 'CastError') {
-        logger.error('Invalid user ID format', { userId: id });
-        throw new AppError('Invalid user ID format', 400, 'INVALID_USER_ID');
-      }
-      
-      logger.error('Failed to get user', { error: error.message, userId: id });
-      
-      if (error.code) {
-        throw error; // Re-throw AppError
-      }
-      
-      throw new AppError('Failed to retrieve user', 500, 'USER_RETRIEVAL_FAILED');
+      logger.error('Failed to get user by ID', {
+        error: error.message,
+        userId
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to retrieve user',
+          code: 'GET_USER_FAILED',
+          details: error.message
+        }
+      });
     }
   }
 
   /**
-   * Get user by External ID (generic endpoint for any external system)
-   * GET /api/users/external/:externalSystem/:externalId
+   * Get user by external ID
+   * GET /api/users/external/:externalId/:externalSystem
    */
   async getUserByExternalId(req, res) {
-    const { externalSystem, externalId } = req.params;
-    logger.info('Get user by External ID request', { externalSystem, externalId });
+    const { externalId, externalSystem } = req.params;
+
+    logger.info('Get user by external ID request', { externalId, externalSystem });
 
     try {
       const user = await User.findByExternalId(externalId, externalSystem);
-      
-      if (!user) {
-        logger.warn('User not found', { externalSystem, externalId });
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
-      }
 
-      logger.info('User retrieved successfully', { 
-        userId: user.id, 
-        externalSystem, 
-        externalId 
-      });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
+      }
 
       res.status(200).json({
         success: true,
@@ -234,225 +186,441 @@ class UserController {
       });
 
     } catch (error) {
-      logger.error('Failed to get user by external ID', { 
-        error: error.message, 
-        externalSystem, 
-        externalId 
+      logger.error('Failed to get user by external ID', {
+        error: error.message,
+        externalId,
+        externalSystem
       });
-      
-      if (error.code) {
-        throw error; // Re-throw AppError
-      }
-      
-      throw new AppError('Failed to retrieve user', 500, 'USER_RETRIEVAL_FAILED');
-    }
-  }
 
-  /**
-   * Update user
-   * PUT /api/users/:id
-   */
-  async updateUser(req, res) {
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({
+      res.status(500).json({
         success: false,
         error: {
-          message: 'Validation failed',
-          code: 'VALIDATION_ERROR',
-          details: errors.array()
+          message: 'Failed to retrieve user',
+          code: 'GET_USER_FAILED',
+          details: error.message
         }
       });
     }
+  }
 
-    const { id } = req.params;
-    const updateData = req.body;
+  /**
+   * Update user profile
+   * PUT /api/users/:userId/profile
+   */
+  async updateUserProfile(req, res) {
+    const { userId } = req.params;
+    const {
+      username,
+      firstName,
+      lastName,
+      email,
+      avatar,
+      language
+    } = req.body;
 
-    logger.info('Update user request', { userId: id, updateFields: Object.keys(updateData) });
+    logger.info('Update user profile request', {
+      userId,
+      updates: { username, firstName, lastName, email: email ? '[REDACTED]' : undefined, language }
+    });
 
     try {
-      // Find user first
-      const user = await User.findById(id);
-      
+      const user = await User.findById(userId);
+
       if (!user || user.status === 'deleted') {
-        logger.warn('User not found for update', { userId: id });
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
       }
 
-      // Build update object with nested structure
-      const updateObject = {};
-      
-      // Handle profile updates
-      if (updateData.username || updateData.firstName || updateData.lastName || updateData.email) {
-        updateObject.profile = {};
-        if (updateData.username !== undefined) updateObject.profile.username = updateData.username;
-        if (updateData.firstName !== undefined) updateObject.profile.firstName = updateData.firstName;
-        if (updateData.lastName !== undefined) updateObject.profile.lastName = updateData.lastName;
-        if (updateData.email !== undefined) updateObject.profile.email = updateData.email;
-        if (updateData.language !== undefined) updateObject.profile.language = updateData.language;
-      }
+      // Update profile fields
+      if (username !== undefined) user.profile.username = username;
+      if (firstName !== undefined) user.profile.firstName = firstName;
+      if (lastName !== undefined) user.profile.lastName = lastName;
+      if (email !== undefined) user.profile.email = email;
+      if (avatar !== undefined) user.profile.avatar = avatar;
+      if (language !== undefined) user.profile.language = language;
 
-      // Handle preferences updates
-      if (updateData.preferences) {
-        updateObject.preferences = { ...user.preferences, ...updateData.preferences };
-      }
+      await user.save();
 
-      // Handle subscription updates
-      if (updateData.subscription) {
-        updateObject.subscription = { ...user.subscription, ...updateData.subscription };
-      }
-
-      // Handle status updates
-      if (updateData.status) {
-        updateObject.status = updateData.status;
-      }
-
-      // Update user
-      const updatedUser = await User.findByIdAndUpdate(
-        id,
-        { $set: updateObject },
-        { new: true, runValidators: true }
-      );
-
-      logger.info('User updated successfully', { 
-        userId: id, 
-        updatedFields: Object.keys(updateObject) 
-      });
+      logger.info('User profile updated', { userId });
 
       res.status(200).json({
         success: true,
-        data: updatedUser.toSafeObject()
+        data: user.toSafeObject(),
+        message: 'Profile updated successfully'
       });
 
     } catch (error) {
-      if (error.name === 'CastError') {
-        logger.error('Invalid user ID format for update', { userId: id });
-        throw new AppError('Invalid user ID format', 400, 'INVALID_USER_ID');
-      }
-      
+      logger.error('Failed to update user profile', {
+        error: error.message,
+        userId
+      });
+
       if (error.name === 'ValidationError') {
-        logger.error('User update validation failed', { userId: id, error: error.message });
-        throw new AppError('Validation failed', 400, 'VALIDATION_ERROR');
+        return res.status(400).json({
+          success: false,
+          error: {
+            message: 'Validation failed',
+            code: 'VALIDATION_ERROR',
+            details: Object.values(error.errors).map(err => err.message)
+          }
+        });
       }
-      
-      logger.error('Failed to update user', { error: error.message, userId: id });
-      
-      if (error.code) {
-        throw error; // Re-throw AppError
-      }
-      
-      throw new AppError('Failed to update user', 500, 'USER_UPDATE_FAILED');
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to update profile',
+          code: 'UPDATE_PROFILE_FAILED',
+          details: error.message
+        }
+      });
     }
   }
 
   /**
-   * Delete user (soft delete)
-   * DELETE /api/users/:id
+   * Update user preferences
+   * PUT /api/users/:userId/preferences
    */
-  async deleteUser(req, res) {
-    const { id } = req.params;
-    logger.info('Delete user request', { userId: id });
+  async updateUserPreferences(req, res) {
+    const { userId } = req.params;
+    const { image, notifications, upload } = req.body;
+
+    logger.info('Update user preferences request', {
+      userId,
+      updates: { image, notifications, upload }
+    });
 
     try {
-      const user = await User.findById(id);
-      
+      const user = await User.findById(userId);
+
       if (!user || user.status === 'deleted') {
-        logger.warn('User not found for deletion', { userId: id });
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
       }
 
-      // Soft delete - mark as deleted instead of removing from database
-      await User.findByIdAndUpdate(id, { 
-        status: 'deleted',
-        updatedAt: new Date()
-      });
+      // Update preferences
+      if (image) {
+        Object.assign(user.preferences.image, image);
+      }
+      if (notifications) {
+        Object.assign(user.preferences.notifications, notifications);
+      }
+      if (upload) {
+        Object.assign(user.preferences.upload, upload);
+      }
 
-      logger.info('User deleted successfully (soft delete)', { userId: id });
+      await user.save();
+
+      logger.info('User preferences updated', { userId });
 
       res.status(200).json({
         success: true,
-        message: 'User deleted successfully',
-        data: { userId: id, deletedAt: new Date().toISOString() }
+        data: user.toSafeObject(),
+        message: 'Preferences updated successfully'
       });
 
     } catch (error) {
-      if (error.name === 'CastError') {
-        logger.error('Invalid user ID format for deletion', { userId: id });
-        throw new AppError('Invalid user ID format', 400, 'INVALID_USER_ID');
+      logger.error('Failed to update user preferences', {
+        error: error.message,
+        userId
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to update preferences',
+          code: 'UPDATE_PREFERENCES_FAILED',
+          details: error.message
+        }
+      });
+    }
+  }
+
+  /**
+   * Get user stock service settings
+   * GET /api/users/:userId/stock-services
+   */
+  async getStockServiceSettings(req, res) {
+    const { userId } = req.params;
+
+    logger.info('Get stock service settings request', { userId });
+
+    try {
+      const user = await User.findById(userId);
+
+      if (!user || user.status === 'deleted') {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
       }
-      
-      logger.error('Failed to delete user', { error: error.message, userId: id });
-      
-      if (error.code) {
-        throw error; // Re-throw AppError
+
+      // Return stock services without sensitive data
+      const stockServices = {};
+      if (user.stockServices) {
+        Object.keys(user.stockServices).forEach(service => {
+          const serviceData = user.stockServices[service];
+          stockServices[service] = {
+            enabled: serviceData.enabled,
+            credentials: {
+              username: serviceData.credentials?.username,
+              ftpHost: serviceData.credentials?.ftpHost,
+              ftpPort: serviceData.credentials?.ftpPort,
+              remotePath: serviceData.credentials?.remotePath,
+              apiKey: serviceData.credentials?.apiKey
+              // Passwords and secrets are excluded
+            },
+            settings: serviceData.settings
+          };
+        });
       }
-      
-      throw new AppError('Failed to delete user', 500, 'USER_DELETE_FAILED');
+
+      res.status(200).json({
+        success: true,
+        data: { stockServices }
+      });
+
+    } catch (error) {
+      logger.error('Failed to get stock service settings', {
+        error: error.message,
+        userId
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to retrieve stock service settings',
+          code: 'GET_STOCK_SETTINGS_FAILED',
+          details: error.message
+        }
+      });
+    }
+  }
+
+  /**
+   * Update stock service settings
+   * PUT /api/users/:userId/stock-services/:service
+   */
+  async updateStockServiceSettings(req, res) {
+    const { userId, service } = req.params;
+    const {
+      enabled,
+      credentials = {},
+      settings = {}
+    } = req.body;
+
+    logger.info('Update stock service settings request', {
+      userId,
+      service,
+      enabled,
+      credentialsKeys: Object.keys(credentials),
+      settingsKeys: Object.keys(settings)
+    });
+
+    try {
+      const user = await User.findById(userId);
+
+      if (!user || user.status === 'deleted') {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
+      }
+
+      // Initialize stock services if not exists
+      if (!user.stockServices) {
+        user.stockServices = {};
+      }
+      if (!user.stockServices[service]) {
+        user.stockServices[service] = {
+          enabled: false,
+          credentials: {},
+          settings: {}
+        };
+      }
+
+      // Update enabled status
+      if (enabled !== undefined) {
+        user.stockServices[service].enabled = enabled;
+      }
+
+      // Update credentials (handle encrypted fields)
+      if (credentials) {
+        Object.keys(credentials).forEach(key => {
+          if (key === 'password' && credentials[key]) {
+            // Encrypt password
+            user.setStockServicePassword(service, credentials[key]);
+          } else if (key === 'secret' && credentials[key]) {
+            // Encrypt secret
+            user.setStockServiceSecret(service, credentials[key]);
+          } else if (credentials[key] !== undefined) {
+            // Regular credential field
+            user.stockServices[service].credentials[key] = credentials[key];
+          }
+        });
+      }
+
+      // Update settings
+      if (settings) {
+        Object.assign(user.stockServices[service].settings, settings);
+      }
+
+      await user.save();
+
+      logger.info('Stock service settings updated', { userId, service });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          service,
+          enabled: user.stockServices[service].enabled,
+          settings: user.stockServices[service].settings
+        },
+        message: `${service} settings updated successfully`
+      });
+
+    } catch (error) {
+      logger.error('Failed to update stock service settings', {
+        error: error.message,
+        userId,
+        service
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to update stock service settings',
+          code: 'UPDATE_STOCK_SETTINGS_FAILED',
+          details: error.message
+        }
+      });
+    }
+  }
+
+  /**
+   * Test stock service connection
+   * POST /api/users/:userId/stock-services/:service/test
+   */
+  async testStockServiceConnection(req, res) {
+    const { userId, service } = req.params;
+
+    logger.info('Test stock service connection request', { userId, service });
+
+    try {
+      const result = await stockUploadService.testConnection(userId, service);
+
+      res.status(200).json({
+        success: true,
+        data: result,
+        message: result.success ? 'Connection test successful' : 'Connection test failed'
+      });
+
+    } catch (error) {
+      logger.error('Failed to test stock service connection', {
+        error: error.message,
+        userId,
+        service
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to test connection',
+          code: 'TEST_CONNECTION_FAILED',
+          details: error.message
+        }
+      });
     }
   }
 
   /**
    * Get user statistics
-   * GET /api/users/:id/stats
+   * GET /api/users/:userId/stats
    */
   async getUserStats(req, res) {
-    const { id } = req.params;
-    logger.info('Get user stats request', { userId: id });
+    const { userId } = req.params;
+
+    logger.info('Get user stats request', { userId });
 
     try {
-      const user = await User.findById(id);
-      
+      const user = await User.findById(userId);
+
       if (!user || user.status === 'deleted') {
-        logger.warn('User not found for stats', { userId: id });
-        throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
       }
 
-      // Calculate additional statistics
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const weekStart = new Date(now.setDate(now.getDate() - now.getDay()));
-      
-      // Get user's most recent activity
-      const daysSinceLastActivity = Math.floor(
-        (new Date() - new Date(user.stats.lastActivity)) / (1000 * 60 * 60 * 24)
-      );
+      // Get additional stats from images
+      const [imageStats] = await Image.aggregate([
+        { $match: { userId: user._id, status: { $ne: 'deleted' } } },
+        {
+          $group: {
+            _id: null,
+            totalImages: { $sum: 1 },
+            totalViews: { $sum: '$stats.views' },
+            totalDownloads: { $sum: '$stats.downloads' },
+            totalShares: { $sum: '$stats.shares' },
+            publicImages: {
+              $sum: { $cond: [{ $eq: ['$flags.isPublic', true] }, 1, 0] }
+            },
+            pendingUploads: {
+              $sum: {
+                $size: {
+                  $filter: {
+                    input: '$uploads',
+                    cond: { $eq: ['$$this.status', 'pending'] }
+                  }
+                }
+              }
+            },
+            completedUploads: {
+              $sum: {
+                $size: {
+                  $filter: {
+                    input: '$uploads',
+                    cond: { $eq: ['$$this.status', 'completed'] }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]);
 
       const stats = {
-        userId: id,
-        profile: {
-          fullName: user.profile.fullName,
-          username: user.profile.username,
-          externalSystem: user.externalSystem,
-          memberSince: user.createdAt
-        },
-        usage: {
-          imagesGenerated: user.stats.imagesGenerated,
-          imagesUploaded: user.stats.imagesUploaded,
-          totalRequests: user.stats.totalRequests,
-          lastActivity: user.stats.lastActivity,
-          daysSinceLastActivity
-        },
-        subscription: {
-          plan: user.subscription.plan,
-          imagesToday: user.subscription.usage.imagesToday,
-          imagesThisMonth: user.subscription.usage.imagesThisMonth,
-          dailyLimit: user.subscription.limits.imagesPerDay,
-          monthlyLimit: user.subscription.limits.imagesPerMonth,
-          canGenerateImages: user.canGenerateImages()
-        },
-        preferences: {
-          defaultModel: user.preferences.image.defaultModel,
-          defaultSize: user.preferences.image.defaultSize,
-          language: user.profile.language
-        },
-        account: {
-          status: user.status,
-          createdAt: user.createdAt,
-          updatedAt: user.updatedAt
+        user: user.stats,
+        subscription: user.subscription,
+        images: imageStats || {
+          totalImages: 0,
+          totalViews: 0,
+          totalDownloads: 0,
+          totalShares: 0,
+          publicImages: 0,
+          pendingUploads: 0,
+          completedUploads: 0
         }
       };
-
-      logger.info('User stats retrieved successfully', { userId: id });
 
       res.status(200).json({
         success: true,
@@ -460,18 +628,189 @@ class UserController {
       });
 
     } catch (error) {
-      if (error.name === 'CastError') {
-        logger.error('Invalid user ID format for stats', { userId: id });
-        throw new AppError('Invalid user ID format', 400, 'INVALID_USER_ID');
+      logger.error('Failed to get user stats', {
+        error: error.message,
+        userId
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to retrieve user statistics',
+          code: 'GET_USER_STATS_FAILED',
+          details: error.message
+        }
+      });
+    }
+  }
+
+  /**
+   * Update user subscription
+   * PUT /api/users/:userId/subscription
+   */
+  async updateUserSubscription(req, res) {
+    const { userId } = req.params;
+    const { plan, limits } = req.body;
+
+    logger.info('Update user subscription request', {
+      userId,
+      plan,
+      limits
+    });
+
+    try {
+      const user = await User.findById(userId);
+
+      if (!user || user.status === 'deleted') {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
       }
-      
-      logger.error('Failed to get user stats', { error: error.message, userId: id });
-      
-      if (error.code) {
-        throw error; // Re-throw AppError
+
+      // Update subscription
+      if (plan) {
+        user.subscription.plan = plan;
       }
-      
-      throw new AppError('Failed to retrieve user statistics', 500, 'USER_STATS_FAILED');
+      if (limits) {
+        Object.assign(user.subscription.limits, limits);
+      }
+
+      await user.save();
+
+      logger.info('User subscription updated', { userId, plan });
+
+      res.status(200).json({
+        success: true,
+        data: {
+          subscription: user.subscription
+        },
+        message: 'Subscription updated successfully'
+      });
+
+    } catch (error) {
+      logger.error('Failed to update user subscription', {
+        error: error.message,
+        userId
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to update subscription',
+          code: 'UPDATE_SUBSCRIPTION_FAILED',
+          details: error.message
+        }
+      });
+    }
+  }
+
+  /**
+   * Delete user (soft delete)
+   * DELETE /api/users/:userId
+   */
+  async deleteUser(req, res) {
+    const { userId } = req.params;
+
+    logger.info('Delete user request', { userId });
+
+    try {
+      const user = await User.findById(userId);
+
+      if (!user || user.status === 'deleted') {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
+      }
+
+      // Soft delete user
+      user.status = 'deleted';
+      await user.save();
+
+      // Also soft delete user's images
+      await Image.updateMany(
+        { userId: user._id },
+        { status: 'deleted' }
+      );
+
+      logger.info('User deleted successfully', { userId });
+
+      res.status(200).json({
+        success: true,
+        message: 'User deleted successfully'
+      });
+
+    } catch (error) {
+      logger.error('Failed to delete user', {
+        error: error.message,
+        userId
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to delete user',
+          code: 'DELETE_USER_FAILED',
+          details: error.message
+        }
+      });
+    }
+  }
+
+  /**
+   * Get system-wide user statistics (admin only)
+   * GET /api/users/stats/system
+   */
+  async getSystemStats(req, res) {
+    logger.info('Get system stats request');
+
+    try {
+      const [userStats] = await User.getUserStats();
+      const [imageStats] = await Image.getStats();
+
+      const stats = {
+        users: userStats || {
+          totalUsers: 0,
+          activeUsers: 0,
+          totalImagesGenerated: 0,
+          totalImagesUploaded: 0,
+          totalRequests: 0
+        },
+        images: imageStats || {
+          totalImages: 0,
+          totalViews: 0,
+          totalDownloads: 0,
+          totalShares: 0,
+          publicImages: 0,
+          pendingModeration: 0
+        }
+      };
+
+      res.status(200).json({
+        success: true,
+        data: stats
+      });
+
+    } catch (error) {
+      logger.error('Failed to get system stats', {
+        error: error.message
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to retrieve system statistics',
+          code: 'GET_SYSTEM_STATS_FAILED',
+          details: error.message
+        }
+      });
     }
   }
 }

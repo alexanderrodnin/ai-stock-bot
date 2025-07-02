@@ -4,6 +4,7 @@
  */
 
 const mongoose = require('mongoose');
+const encryption = require('../utils/encryption');
 
 const userSchema = new mongoose.Schema({
   // External ID (could be telegram, web app, etc.)
@@ -106,6 +107,127 @@ const userSchema = new mongoose.Schema({
       defaultKeywords: {
         type: [String],
         default: []
+      }
+    }
+  },
+
+  // Stock services settings (encrypted sensitive data)
+  stockServices: {
+    // 123RF settings
+    rf123: {
+      enabled: {
+        type: Boolean,
+        default: false
+      },
+      credentials: {
+        username: {
+          type: String,
+          trim: true
+        },
+        // Encrypted password
+        passwordHash: {
+          type: String
+        },
+        ftpHost: {
+          type: String,
+          trim: true
+        },
+        ftpPort: {
+          type: Number,
+          default: 21
+        },
+        remotePath: {
+          type: String,
+          default: '/uploads',
+          trim: true
+        }
+      },
+      settings: {
+        autoUpload: {
+          type: Boolean,
+          default: false
+        },
+        defaultCategory: {
+          type: String,
+          trim: true
+        },
+        defaultKeywords: {
+          type: [String],
+          default: []
+        },
+        defaultDescription: {
+          type: String,
+          trim: true
+        },
+        pricing: {
+          type: String,
+          enum: ['standard', 'premium', 'exclusive'],
+          default: 'standard'
+        }
+      }
+    },
+    
+    // Shutterstock settings (for future expansion)
+    shutterstock: {
+      enabled: {
+        type: Boolean,
+        default: false
+      },
+      credentials: {
+        apiKey: {
+          type: String,
+          trim: true
+        },
+        // Encrypted secret
+        secretHash: {
+          type: String
+        }
+      },
+      settings: {
+        autoUpload: {
+          type: Boolean,
+          default: false
+        },
+        defaultCategory: {
+          type: String,
+          trim: true
+        },
+        defaultKeywords: {
+          type: [String],
+          default: []
+        }
+      }
+    },
+
+    // Adobe Stock settings (for future expansion)
+    adobeStock: {
+      enabled: {
+        type: Boolean,
+        default: false
+      },
+      credentials: {
+        apiKey: {
+          type: String,
+          trim: true
+        },
+        // Encrypted secret
+        secretHash: {
+          type: String
+        }
+      },
+      settings: {
+        autoUpload: {
+          type: Boolean,
+          default: false
+        },
+        defaultCategory: {
+          type: String,
+          trim: true
+        },
+        defaultKeywords: {
+          type: [String],
+          default: []
+        }
       }
     }
   },
@@ -283,7 +405,145 @@ userSchema.methods.toSafeObject = function() {
   // Remove sensitive information
   delete obj.metadata;
   
+  // Remove encrypted passwords/secrets from stock services
+  if (obj.stockServices) {
+    Object.keys(obj.stockServices).forEach(service => {
+      if (obj.stockServices[service].credentials) {
+        delete obj.stockServices[service].credentials.passwordHash;
+        delete obj.stockServices[service].credentials.secretHash;
+      }
+    });
+  }
+  
   return obj;
+};
+
+// Stock services methods
+userSchema.methods.setStockServicePassword = function(service, password) {
+  if (!password) return;
+  
+  const validServices = ['rf123', 'shutterstock', 'adobeStock'];
+  if (!validServices.includes(service)) {
+    throw new Error(`Invalid stock service: ${service}`);
+  }
+  
+  if (!this.stockServices) {
+    this.stockServices = {};
+  }
+  if (!this.stockServices[service]) {
+    this.stockServices[service] = { credentials: {}, settings: {} };
+  }
+  if (!this.stockServices[service].credentials) {
+    this.stockServices[service].credentials = {};
+  }
+  
+  this.stockServices[service].credentials.passwordHash = encryption.encrypt(password);
+};
+
+userSchema.methods.getStockServicePassword = function(service) {
+  const validServices = ['rf123', 'shutterstock', 'adobeStock'];
+  if (!validServices.includes(service)) {
+    throw new Error(`Invalid stock service: ${service}`);
+  }
+  
+  if (!this.stockServices?.[service]?.credentials?.passwordHash) {
+    return null;
+  }
+  
+  try {
+    return encryption.decrypt(this.stockServices[service].credentials.passwordHash);
+  } catch (error) {
+    console.error(`Failed to decrypt password for ${service}:`, error.message);
+    return null;
+  }
+};
+
+userSchema.methods.setStockServiceSecret = function(service, secret) {
+  if (!secret) return;
+  
+  const validServices = ['shutterstock', 'adobeStock'];
+  if (!validServices.includes(service)) {
+    throw new Error(`Invalid stock service for secret: ${service}`);
+  }
+  
+  if (!this.stockServices) {
+    this.stockServices = {};
+  }
+  if (!this.stockServices[service]) {
+    this.stockServices[service] = { credentials: {}, settings: {} };
+  }
+  if (!this.stockServices[service].credentials) {
+    this.stockServices[service].credentials = {};
+  }
+  
+  this.stockServices[service].credentials.secretHash = encryption.encrypt(secret);
+};
+
+userSchema.methods.getStockServiceSecret = function(service) {
+  const validServices = ['shutterstock', 'adobeStock'];
+  if (!validServices.includes(service)) {
+    throw new Error(`Invalid stock service for secret: ${service}`);
+  }
+  
+  if (!this.stockServices?.[service]?.credentials?.secretHash) {
+    return null;
+  }
+  
+  try {
+    return encryption.decrypt(this.stockServices[service].credentials.secretHash);
+  } catch (error) {
+    console.error(`Failed to decrypt secret for ${service}:`, error.message);
+    return null;
+  }
+};
+
+userSchema.methods.getStockServiceConfig = function(service) {
+  const validServices = ['rf123', 'shutterstock', 'adobeStock'];
+  if (!validServices.includes(service)) {
+    throw new Error(`Invalid stock service: ${service}`);
+  }
+  
+  if (!this.stockServices?.[service]?.enabled) {
+    return null;
+  }
+  
+  const config = {
+    enabled: this.stockServices[service].enabled,
+    credentials: { ...this.stockServices[service].credentials },
+    settings: { ...this.stockServices[service].settings }
+  };
+  
+  // Decrypt sensitive data
+  if (service === 'rf123' && config.credentials.passwordHash) {
+    config.credentials.password = this.getStockServicePassword(service);
+    delete config.credentials.passwordHash;
+  }
+  
+  if (['shutterstock', 'adobeStock'].includes(service) && config.credentials.secretHash) {
+    config.credentials.secret = this.getStockServiceSecret(service);
+    delete config.credentials.secretHash;
+  }
+  
+  return config;
+};
+
+userSchema.methods.updateStockServiceSettings = function(service, settings) {
+  const validServices = ['rf123', 'shutterstock', 'adobeStock'];
+  if (!validServices.includes(service)) {
+    throw new Error(`Invalid stock service: ${service}`);
+  }
+  
+  if (!this.stockServices) {
+    this.stockServices = {};
+  }
+  if (!this.stockServices[service]) {
+    this.stockServices[service] = { credentials: {}, settings: {} };
+  }
+  
+  // Update settings
+  Object.assign(this.stockServices[service].settings, settings);
+  
+  return this.save();
 };
 
 const User = mongoose.model('User', userSchema);

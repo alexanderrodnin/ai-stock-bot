@@ -87,6 +87,11 @@ const config = {
     apiKeyHeader: 'X-API-Key',
     jwtSecret: process.env.JWT_SECRET || 'your-secret-key',
     jwtExpiration: process.env.JWT_EXPIRATION || '24h'
+  },
+
+  // Encryption configuration
+  encryption: {
+    secretKey: process.env.ENCRYPTION_SECRET_KEY || process.env.JWT_SECRET || 'your-encryption-secret-key'
   }
 };
 
