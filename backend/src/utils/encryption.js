@@ -5,12 +5,8 @@
 const crypto = require('crypto');
 const config = require('../config/config');
 
-const ALGORITHM = 'aes-256-gcm';
-const IV_LENGTH = 16; // For GCM, this is always 16
-const SALT_LENGTH = 64;
-const TAG_LENGTH = 16;
-const TAG_POSITION = SALT_LENGTH + IV_LENGTH;
-const ENCRYPTED_POSITION = TAG_POSITION + TAG_LENGTH;
+const ALGORITHM = 'aes-256-cbc';
+const IV_LENGTH = 16;
 
 class EncryptionService {
   constructor() {
@@ -18,6 +14,8 @@ class EncryptionService {
     if (!this.secretKey) {
       throw new Error('Encryption secret key is not configured');
     }
+    // Ensure key is 32 bytes for AES-256
+    this.key = crypto.createHash('sha256').update(this.secretKey).digest();
   }
 
   /**
@@ -29,32 +27,16 @@ class EncryptionService {
     if (!text) return null;
 
     try {
-      // Generate random salt and IV
-      const salt = crypto.randomBytes(SALT_LENGTH);
       const iv = crypto.randomBytes(IV_LENGTH);
+      const cipher = crypto.createCipheriv(ALGORITHM, this.key, iv);
       
-      // Derive key from secret and salt
-      const key = crypto.pbkdf2Sync(this.secretKey, salt, 100000, 32, 'sha256');
-      
-      // Create cipher
-      const cipher = crypto.createCipherGCM(ALGORITHM, key, iv);
-      
-      // Encrypt the text
       let encrypted = cipher.update(text, 'utf8', 'hex');
       encrypted += cipher.final('hex');
       
-      // Get the authentication tag
-      const tag = cipher.getAuthTag();
+      // Combine IV and encrypted data
+      const combined = iv.toString('hex') + ':' + encrypted;
       
-      // Combine salt + iv + tag + encrypted data
-      const combined = Buffer.concat([
-        salt,
-        iv,
-        tag,
-        Buffer.from(encrypted, 'hex')
-      ]);
-      
-      return combined.toString('base64');
+      return Buffer.from(combined).toString('base64');
     } catch (error) {
       throw new Error(`Encryption failed: ${error.message}`);
     }
@@ -69,24 +51,13 @@ class EncryptionService {
     if (!encryptedData) return null;
 
     try {
-      // Convert from base64
-      const combined = Buffer.from(encryptedData, 'base64');
+      const combined = Buffer.from(encryptedData, 'base64').toString();
+      const [ivHex, encrypted] = combined.split(':');
       
-      // Extract components
-      const salt = combined.subarray(0, SALT_LENGTH);
-      const iv = combined.subarray(SALT_LENGTH, TAG_POSITION);
-      const tag = combined.subarray(TAG_POSITION, ENCRYPTED_POSITION);
-      const encrypted = combined.subarray(ENCRYPTED_POSITION);
+      const iv = Buffer.from(ivHex, 'hex');
+      const decipher = crypto.createDecipheriv(ALGORITHM, this.key, iv);
       
-      // Derive key from secret and salt
-      const key = crypto.pbkdf2Sync(this.secretKey, salt, 100000, 32, 'sha256');
-      
-      // Create decipher
-      const decipher = crypto.createDecipherGCM(ALGORITHM, key, iv);
-      decipher.setAuthTag(tag);
-      
-      // Decrypt the data
-      let decrypted = decipher.update(encrypted, null, 'utf8');
+      let decrypted = decipher.update(encrypted, 'hex', 'utf8');
       decrypted += decipher.final('utf8');
       
       return decrypted;

@@ -8,12 +8,13 @@ const path = require('path');
 const crypto = require('crypto');
 const axios = require('axios');
 const sharp = require('sharp');
-const OpenAI = require('openai');
+const { OpenAI } = require('openai');
 
 const config = require('../config/config');
 const User = require('../models/User');
 const Image = require('../models/Image');
 const logger = require('../utils/logger');
+const { getMockImageUrl } = require('../utils/mock-image-urls');
 
 class ImageService {
   constructor() {
@@ -69,10 +70,13 @@ class ImageService {
         throw new Error('Daily image generation limit exceeded');
       }
 
+      // Sanitize the prompt to improve chances of passing content filters
+      const sanitizedPrompt = `Create a safe, appropriate digital illustration of: ${prompt.trim()}. Make it suitable for all audiences, non-political, non-controversial, and with no text.`;
+
       // Prepare generation parameters
       const generationParams = {
         model: options.model || user.preferences?.image?.defaultModel || 'dall-e-3',
-        prompt: prompt.trim(),
+        prompt: sanitizedPrompt,
         n: 1,
         size: options.size || user.preferences?.image?.defaultSize || '1024x1024',
         response_format: 'url'
@@ -89,17 +93,50 @@ class ImageService {
         userExternalId,
         model: generationParams.model,
         size: generationParams.size,
-        promptLength: prompt.length
+        promptLength: prompt.length,
+        sanitizedPromptLength: sanitizedPrompt.length
       });
 
-      // Generate image with OpenAI
-      const response = await this.openai.images.generate(generationParams);
+      let imageData;
+      let usedSource = 'OpenAI';
+      let fallbackReason = null;
 
-      if (!response.data || response.data.length === 0) {
-        throw new Error('No image data received from OpenAI');
+      try {
+        // Try OpenAI first
+        const response = await this.openai.images.generate(generationParams);
+
+        if (!response.data || response.data.length === 0) {
+          throw new Error('No image data received from OpenAI');
+        }
+
+        imageData = response.data[0];
+        
+      } catch (openaiError) {
+        // Handle OpenAI API errors with fallback
+        logger.warn('OpenAI API failed, using fallback', {
+          userId,
+          userExternalId,
+          error: openaiError.message,
+          errorType: openaiError.error?.type
+        });
+
+        // Determine fallback reason
+        if (openaiError.status === 429 || openaiError.message?.includes('quota')) {
+          fallbackReason = 'Quota Exceeded';
+        } else if (openaiError.error?.type === 'image_generation_user_error') {
+          fallbackReason = 'Content Policy Restriction';
+        } else {
+          fallbackReason = 'API Error';
+        }
+
+        // Use mock image as fallback
+        const mockImageUrl = getMockImageUrl(prompt);
+        imageData = {
+          url: mockImageUrl,
+          revised_prompt: `Fallback image for: ${prompt}`
+        };
+        usedSource = `Fallback (${fallbackReason})`;
       }
-
-      const imageData = response.data[0];
       
       // Download and save the image
       const fileInfo = await this.downloadAndSaveImage(imageData.url, {
@@ -116,15 +153,17 @@ class ImageService {
         generation: {
           prompt,
           revisedPrompt: imageData.revised_prompt,
-          model: generationParams.model,
+          model: usedSource === 'OpenAI' ? generationParams.model : 'fallback',
           size: generationParams.size,
           quality: generationParams.quality,
           style: generationParams.style,
           generatedAt: new Date(),
-          openaiResponse: {
-            created: response.created,
-            data: response.data
-          }
+          usedSource,
+          fallbackReason,
+          openaiResponse: usedSource === 'OpenAI' ? {
+            created: Date.now(),
+            data: [imageData]
+          } : null
         },
         file: {
           ...fileInfo,
@@ -202,28 +241,83 @@ class ImageService {
       // Get image metadata using sharp
       const imageMetadata = await sharp(imageBuffer).metadata();
       
-      // Generate filename and hash
-      const hash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
-      const extension = this.getExtensionFromMimeType(imageMetadata.format);
-      const filename = `${Date.now()}_${hash.substring(0, 16)}.${extension}`;
-      const filePath = path.join(this.tempDir, filename);
+      // Generate temporary filename for processing
+      const tempHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+      const tempFilename = `${Date.now()}_${tempHash.substring(0, 16)}_temp.jpg`;
+      const tempFilePath = path.join(this.tempDir, tempFilename);
 
-      // Save image to disk
-      await fs.writeFile(filePath, imageBuffer);
+      // Save original image temporarily
+      await fs.writeFile(tempFilePath, imageBuffer);
+
+      // Generate final filename
+      const finalFilename = `${Date.now()}_${tempHash.substring(0, 16)}.jpg`;
+      const finalFilePath = path.join(this.tempDir, finalFilename);
+
+      // Process image with sharp to ensure valid dimensions for 123RF
+      // For 123RF, we need at least 4000x4000 pixels (6 megapixels)
+      const processedImage = await sharp(tempFilePath)
+        .resize({
+          width: 4000,
+          height: 4000,
+          fit: 'inside',
+          withoutEnlargement: false // Allow enlargement for smaller images
+        })
+        .jpeg({
+          quality: 72,
+          progressive: false, // Baseline JPEG for better compatibility
+          mozjpeg: true // Better compression
+        })
+        .withMetadata() // Save metadata
+        .toColorspace('srgb') // Force sRGB colorspace
+        .toFile(finalFilePath);
+
+      // Remove temporary file
+      try {
+        await fs.unlink(tempFilePath);
+      } catch (unlinkError) {
+        logger.warn('Failed to delete temporary file', {
+          tempFilePath,
+          error: unlinkError.message
+        });
+      }
+
+      // Get final image metadata
+      const finalImageMetadata = await sharp(finalFilePath).metadata();
+      
+      // Calculate file size
+      const finalStats = await fs.stat(finalFilePath);
+      const finalSize = finalStats.size;
+
+      // Generate hash of processed image
+      const processedImageBuffer = await fs.readFile(finalFilePath);
+      const finalHash = crypto.createHash('sha256').update(processedImageBuffer).digest('hex');
 
       // Generate thumbnail
-      const thumbnailPath = await this.generateThumbnail(filePath, filename);
+      const thumbnailPath = await this.generateThumbnail(finalFilePath, finalFilename);
+
+      logger.info('Image processed successfully', {
+        originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
+        processedSize: `${finalImageMetadata.width}x${finalImageMetadata.height}`,
+        originalFileSize: imageBuffer.length,
+        processedFileSize: finalSize
+      });
 
       return {
         originalFilename: this.extractFilenameFromUrl(imageUrl),
-        filename,
-        path: filePath,
-        size: imageBuffer.length,
-        mimeType: `image/${imageMetadata.format}`,
-        width: imageMetadata.width,
-        height: imageMetadata.height,
-        hash,
-        thumbnailPath
+        filename: finalFilename,
+        path: finalFilePath,
+        size: finalSize,
+        mimeType: 'image/jpeg',
+        width: finalImageMetadata.width,
+        height: finalImageMetadata.height,
+        hash: finalHash,
+        thumbnailPath,
+        processing: {
+          originalWidth: imageMetadata.width,
+          originalHeight: imageMetadata.height,
+          originalSize: imageBuffer.length,
+          resized: finalImageMetadata.width !== imageMetadata.width || finalImageMetadata.height !== imageMetadata.height
+        }
       };
 
     } catch (error) {

@@ -16,6 +16,12 @@ const logger = require('../utils/logger');
 class StockUploadService {
   constructor() {
     this.supportedServices = ['123rf', 'shutterstock', 'adobeStock'];
+    // Map service names to user model field names
+    this.serviceMapping = {
+      '123rf': 'rf123',
+      'shutterstock': 'shutterstock',
+      'adobeStock': 'adobeStock'
+    };
   }
 
   /**
@@ -47,8 +53,9 @@ class StockUploadService {
         throw new Error('Image not found or access denied');
       }
 
-      // Get user's stock service configuration
-      const serviceConfig = user.getStockServiceConfig(service);
+      // Get user's stock service configuration using mapped service name
+      const mappedServiceName = this.serviceMapping[service];
+      const serviceConfig = user.getStockServiceConfig(mappedServiceName);
       if (!serviceConfig) {
         throw new Error(`${service} is not configured for this user`);
       }

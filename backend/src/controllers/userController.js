@@ -422,9 +422,28 @@ class UserController {
       settings = {}
     } = req.body;
 
+    // Map external service names to internal names
+    const serviceMapping = {
+      '123rf': 'rf123',
+      'shutterstock': 'shutterstock',
+      'adobeStock': 'adobeStock'
+    };
+
+    const internalServiceName = serviceMapping[service];
+    if (!internalServiceName) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: `Invalid stock service: ${service}`,
+          code: 'INVALID_SERVICE'
+        }
+      });
+    }
+
     logger.info('Update stock service settings request', {
       userId,
       service,
+      internalServiceName,
       enabled,
       credentialsKeys: Object.keys(credentials),
       settingsKeys: Object.keys(settings)
@@ -447,8 +466,8 @@ class UserController {
       if (!user.stockServices) {
         user.stockServices = {};
       }
-      if (!user.stockServices[service]) {
-        user.stockServices[service] = {
+      if (!user.stockServices[internalServiceName]) {
+        user.stockServices[internalServiceName] = {
           enabled: false,
           credentials: {},
           settings: {}
@@ -457,7 +476,7 @@ class UserController {
 
       // Update enabled status
       if (enabled !== undefined) {
-        user.stockServices[service].enabled = enabled;
+        user.stockServices[internalServiceName].enabled = enabled;
       }
 
       // Update credentials (handle encrypted fields)
@@ -465,32 +484,32 @@ class UserController {
         Object.keys(credentials).forEach(key => {
           if (key === 'password' && credentials[key]) {
             // Encrypt password
-            user.setStockServicePassword(service, credentials[key]);
+            user.setStockServicePassword(internalServiceName, credentials[key]);
           } else if (key === 'secret' && credentials[key]) {
             // Encrypt secret
-            user.setStockServiceSecret(service, credentials[key]);
+            user.setStockServiceSecret(internalServiceName, credentials[key]);
           } else if (credentials[key] !== undefined) {
             // Regular credential field
-            user.stockServices[service].credentials[key] = credentials[key];
+            user.stockServices[internalServiceName].credentials[key] = credentials[key];
           }
         });
       }
 
       // Update settings
       if (settings) {
-        Object.assign(user.stockServices[service].settings, settings);
+        Object.assign(user.stockServices[internalServiceName].settings, settings);
       }
 
       await user.save();
 
-      logger.info('Stock service settings updated', { userId, service });
+      logger.info('Stock service settings updated', { userId, service, internalServiceName });
 
       res.status(200).json({
         success: true,
         data: {
           service,
-          enabled: user.stockServices[service].enabled,
-          settings: user.stockServices[service].settings
+          enabled: user.stockServices[internalServiceName].enabled,
+          settings: user.stockServices[internalServiceName].settings
         },
         message: `${service} settings updated successfully`
       });

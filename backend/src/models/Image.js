@@ -50,8 +50,21 @@ const imageSchema = new mongoose.Schema({
     model: {
       type: String,
       required: true,
-      enum: ['dall-e-2', 'dall-e-3'],
+      enum: ['dall-e-2', 'dall-e-3', 'fallback'],
       default: 'dall-e-3'
+    },
+
+    // Source of the image (OpenAI or fallback)
+    usedSource: {
+      type: String,
+      default: 'OpenAI'
+    },
+
+    // Reason for fallback (if applicable)
+    fallbackReason: {
+      type: String,
+      enum: ['Quota Exceeded', 'Content Policy Restriction', 'API Error'],
+      sparse: true
     },
 
     // Image parameters
