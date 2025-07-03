@@ -610,17 +610,17 @@ async function handleSetupStep(msg, session) {
           session.data.remotePath = '/ai_images';
           
           // Show confirmation for 123RF with default settings
-          const rf123ConfirmMessage = `📋 *Проверьте настройки ${serviceName}:*
+          const rf123ConfirmMessage = `📋 Проверьте настройки ${serviceName}:
 
-👤 **Логин:** ${session.data.username}
-🔐 **Пароль:** ${'*'.repeat(session.data.password.length)}
-🌐 **FTP хост:** ${session.data.ftpHost} *(автоматически)*
-🔌 **FTP порт:** ${session.data.ftpPort} *(автоматически)*
-📁 **Путь:** ${session.data.remotePath} *(автоматически)*
+👤 Логин: ${session.data.username}
+🔐 Пароль: ${'*'.repeat(session.data.password.length)}
+🌐 FTP хост: ${session.data.ftpHost} (автоматически)
+🔌 FTP порт: ${session.data.ftpPort} (автоматически)
+📁 Путь: ${session.data.remotePath} (автоматически)
 
 Все верно? Отправьте "да" для сохранения или "нет" для отмены.`;
           
-          await bot.sendMessage(chatId, rf123ConfirmMessage, { parse_mode: 'Markdown' });
+          await bot.sendMessage(chatId, rf123ConfirmMessage);
         } else if (session.service === 'shutterstock') {
           session.step = 'api_key';
           await bot.sendMessage(chatId, 
