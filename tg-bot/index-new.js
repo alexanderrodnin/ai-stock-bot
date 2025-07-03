@@ -602,10 +602,25 @@ async function handleSetupStep(msg, session) {
         
         // Different next steps based on service
         if (session.service === '123rf') {
-          session.step = 'ftp_host';
-          await bot.sendMessage(chatId, 
-            `✅ Пароль сохранен.\n\n🌐 Введите FTP хост (обычно: ftp.123rf.com):`
-          );
+          session.step = 'confirm';
+          
+          // Set default FTP settings for 123RF
+          session.data.ftpHost = 'ftp.123rf.com';
+          session.data.ftpPort = 21;
+          session.data.remotePath = '/ai_images';
+          
+          // Show confirmation for 123RF with default settings
+          const rf123ConfirmMessage = `📋 *Проверьте настройки ${serviceName}:*
+
+👤 **Логин:** ${session.data.username}
+🔐 **Пароль:** ${'*'.repeat(session.data.password.length)}
+🌐 **FTP хост:** ${session.data.ftpHost} *(автоматически)*
+🔌 **FTP порт:** ${session.data.ftpPort} *(автоматически)*
+📁 **Путь:** ${session.data.remotePath} *(автоматически)*
+
+Все верно? Отправьте "да" для сохранения или "нет" для отмены.`;
+          
+          await bot.sendMessage(chatId, rf123ConfirmMessage, { parse_mode: 'Markdown' });
         } else if (session.service === 'shutterstock') {
           session.step = 'api_key';
           await bot.sendMessage(chatId, 
@@ -619,42 +634,6 @@ async function handleSetupStep(msg, session) {
         }
         break;
         
-      case 'ftp_host':
-        session.data.ftpHost = input || 'ftp.123rf.com';
-        session.step = 'ftp_port';
-        
-        await bot.sendMessage(chatId, 
-          `✅ FTP хост сохранен: ${session.data.ftpHost}\n\n🔌 Введите FTP порт (обычно: 21):`
-        );
-        break;
-        
-      case 'ftp_port':
-        const port = parseInt(input) || 21;
-        session.data.ftpPort = port;
-        session.step = 'remote_path';
-        
-        await bot.sendMessage(chatId, 
-          `✅ FTP порт сохранен: ${port}\n\n📁 Введите удаленный путь (например: /ai_images):`
-        );
-        break;
-        
-      case 'remote_path':
-        session.data.remotePath = input || '/';
-        session.step = 'confirm';
-        
-        // Show confirmation for 123RF
-        const rf123ConfirmMessage = `📋 *Проверьте настройки ${serviceName}:*
-
-👤 **Логин:** ${session.data.username}
-🔐 **Пароль:** ${'*'.repeat(session.data.password.length)}
-🌐 **FTP хост:** ${session.data.ftpHost}
-🔌 **FTP порт:** ${session.data.ftpPort}
-📁 **Путь:** ${session.data.remotePath}
-
-Все верно? Отправьте "да" для сохранения или "нет" для отмены.`;
-        
-        await bot.sendMessage(chatId, rf123ConfirmMessage, { parse_mode: 'Markdown' });
-        break;
         
       case 'api_key':
         if (!input) {
@@ -962,9 +941,9 @@ async function showSetupHelp(chatId) {
   const helpMessage = `ℹ️ *Помощь по настройке стоков*
 
 **123RF:**
-• Нужен FTP доступ к вашему аккаунту
-• Логин и пароль от FTP
-• Обычно совпадают с данными аккаунта
+• Нужен только логин и пароль от аккаунта
+• FTP настройки устанавливаются автоматически
+• Обычно совпадают с данными для входа на сайт
 
 **Shutterstock:**
 • Требуется API ключ
