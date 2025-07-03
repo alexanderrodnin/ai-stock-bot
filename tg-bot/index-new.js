@@ -378,10 +378,17 @@ bot.onText(/\/stats/, async (msg) => {
 // Main message handler
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
+  const telegramUserId = msg.from.id;
   
   // Skip command messages (they're handled by specific handlers)
   if (msg.text && msg.text.startsWith('/')) {
     return;
+  }
+
+  // Check if user is in a setup session
+  const session = userSessions.get(telegramUserId);
+  if (session && session.action === 'setup_stock') {
+    return handleSetupStep(msg, session);
   }
 
   // Check if the message is text
@@ -547,6 +554,286 @@ bot.on('callback_query', async (callbackQuery) => {
 });
 
 /**
+ * Handle setup step processing
+ */
+async function handleSetupStep(msg, session) {
+  const chatId = msg.chat.id;
+  const telegramUserId = msg.from.id;
+  const input = msg.text.trim();
+  
+  // Handle cancel command
+  if (input.toLowerCase() === '/cancel' || input.toLowerCase() === 'отмена') {
+    userSessions.delete(telegramUserId);
+    return bot.sendMessage(chatId, '❌ Настройка отменена.');
+  }
+  
+  const serviceNames = {
+    '123rf': '123RF',
+    'shutterstock': 'Shutterstock',
+    'adobeStock': 'Adobe Stock'
+  };
+  
+  const serviceName = serviceNames[session.service];
+  
+  try {
+    // Initialize user to get userId
+    const user = await initializeUser(msg.from);
+    
+    switch (session.step) {
+      case 'username':
+        if (!input) {
+          return bot.sendMessage(chatId, '❌ Логин не может быть пустым. Попробуйте еще раз:');
+        }
+        
+        session.data.username = input;
+        session.step = 'password';
+        
+        await bot.sendMessage(chatId, 
+          `✅ Логин сохранен: ${input}\n\n🔐 Теперь введите пароль для ${serviceName}:`
+        );
+        break;
+        
+      case 'password':
+        if (!input) {
+          return bot.sendMessage(chatId, '❌ Пароль не может быть пустым. Попробуйте еще раз:');
+        }
+        
+        session.data.password = input;
+        
+        // Different next steps based on service
+        if (session.service === '123rf') {
+          session.step = 'ftp_host';
+          await bot.sendMessage(chatId, 
+            `✅ Пароль сохранен.\n\n🌐 Введите FTP хост (обычно: ftp.123rf.com):`
+          );
+        } else if (session.service === 'shutterstock') {
+          session.step = 'api_key';
+          await bot.sendMessage(chatId, 
+            `✅ Пароль сохранен.\n\n🔑 Введите API ключ Shutterstock:`
+          );
+        } else if (session.service === 'adobeStock') {
+          session.step = 'api_key';
+          await bot.sendMessage(chatId, 
+            `✅ Пароль сохранен.\n\n🔑 Введите API ключ Adobe Stock:`
+          );
+        }
+        break;
+        
+      case 'ftp_host':
+        session.data.ftpHost = input || 'ftp.123rf.com';
+        session.step = 'ftp_port';
+        
+        await bot.sendMessage(chatId, 
+          `✅ FTP хост сохранен: ${session.data.ftpHost}\n\n🔌 Введите FTP порт (обычно: 21):`
+        );
+        break;
+        
+      case 'ftp_port':
+        const port = parseInt(input) || 21;
+        session.data.ftpPort = port;
+        session.step = 'remote_path';
+        
+        await bot.sendMessage(chatId, 
+          `✅ FTP порт сохранен: ${port}\n\n📁 Введите удаленный путь (например: /ai_images):`
+        );
+        break;
+        
+      case 'remote_path':
+        session.data.remotePath = input || '/';
+        session.step = 'confirm';
+        
+        // Show confirmation for 123RF
+        const rf123ConfirmMessage = `📋 *Проверьте настройки ${serviceName}:*
+
+👤 **Логин:** ${session.data.username}
+🔐 **Пароль:** ${'*'.repeat(session.data.password.length)}
+🌐 **FTP хост:** ${session.data.ftpHost}
+🔌 **FTP порт:** ${session.data.ftpPort}
+📁 **Путь:** ${session.data.remotePath}
+
+Все верно? Отправьте "да" для сохранения или "нет" для отмены.`;
+        
+        await bot.sendMessage(chatId, rf123ConfirmMessage, { parse_mode: 'Markdown' });
+        break;
+        
+      case 'api_key':
+        if (!input) {
+          return bot.sendMessage(chatId, '❌ API ключ не может быть пустым. Попробуйте еще раз:');
+        }
+        
+        session.data.apiKey = input;
+        
+        if (session.service === 'adobeStock') {
+          session.step = 'api_secret';
+          await bot.sendMessage(chatId, 
+            `✅ API ключ сохранен.\n\n🔐 Введите API секрет Adobe Stock:`
+          );
+        } else {
+          session.step = 'confirm';
+          
+          // Show confirmation for Shutterstock
+          const shutterstockConfirmMessage = `📋 *Проверьте настройки ${serviceName}:*
+
+👤 **Логин:** ${session.data.username}
+🔐 **Пароль:** ${'*'.repeat(session.data.password.length)}
+🔑 **API ключ:** ${session.data.apiKey.substring(0, 8)}...
+
+Все верно? Отправьте "да" для сохранения или "нет" для отмены.`;
+          
+          await bot.sendMessage(chatId, shutterstockConfirmMessage, { parse_mode: 'Markdown' });
+        }
+        break;
+        
+      case 'api_secret':
+        if (!input) {
+          return bot.sendMessage(chatId, '❌ API секрет не может быть пустым. Попробуйте еще раз:');
+        }
+        
+        session.data.apiSecret = input;
+        session.step = 'confirm';
+        
+        // Show confirmation for Adobe Stock
+        const adobeConfirmMessage = `📋 *Проверьте настройки ${serviceName}:*
+
+👤 **Логин:** ${session.data.username}
+🔐 **Пароль:** ${'*'.repeat(session.data.password.length)}
+🔑 **API ключ:** ${session.data.apiKey.substring(0, 8)}...
+🔐 **API секрет:** ${session.data.apiSecret.substring(0, 8)}...
+
+Все верно? Отправьте "да" для сохранения или "нет" для отмены.`;
+        
+        await bot.sendMessage(chatId, adobeConfirmMessage, { parse_mode: 'Markdown' });
+        break;
+        
+      case 'confirm':
+        const confirmation = input.toLowerCase();
+        
+        if (confirmation === 'да' || confirmation === 'yes' || confirmation === 'y') {
+          // Save settings to backend
+          await saveStockServiceSettings(chatId, telegramUserId, user.id, session);
+        } else {
+          userSessions.delete(telegramUserId);
+          await bot.sendMessage(chatId, '❌ Настройка отменена.');
+        }
+        break;
+        
+      default:
+        userSessions.delete(telegramUserId);
+        await bot.sendMessage(chatId, '❌ Произошла ошибка. Попробуйте начать настройку заново.');
+    }
+    
+  } catch (error) {
+    console.error('Error in setup step:', error.message);
+    userSessions.delete(telegramUserId);
+    await bot.sendMessage(chatId, '❌ Произошла ошибка. Попробуйте позже.');
+  }
+}
+
+/**
+ * Save stock service settings to backend
+ */
+async function saveStockServiceSettings(chatId, telegramUserId, userId, session) {
+  const serviceNames = {
+    '123rf': '123RF',
+    'shutterstock': 'Shutterstock',
+    'adobeStock': 'Adobe Stock'
+  };
+  
+  const serviceName = serviceNames[session.service];
+  
+  try {
+    // Show saving message
+    const savingMessage = await bot.sendMessage(chatId, 
+      `💾 Сохраняю настройки ${serviceName}...`
+    );
+    
+    // Prepare settings object based on service type
+    let settings = {
+      enabled: true,
+      credentials: {
+        username: session.data.username,
+        password: session.data.password
+      },
+      settings: {
+        autoUpload: false,
+        defaultKeywords: ['ai', 'generated', 'digital', 'art'],
+        defaultDescription: 'AI-generated digital artwork',
+        pricing: 'standard'
+      }
+    };
+    
+    // Add service-specific credentials
+    if (session.service === '123rf') {
+      settings.credentials.ftpHost = session.data.ftpHost;
+      settings.credentials.ftpPort = session.data.ftpPort;
+      settings.credentials.remotePath = session.data.remotePath;
+    } else if (session.service === 'shutterstock') {
+      settings.credentials.apiKey = session.data.apiKey;
+    } else if (session.service === 'adobeStock') {
+      settings.credentials.apiKey = session.data.apiKey;
+      settings.credentials.secret = session.data.apiSecret;
+    }
+    
+    // Save to backend
+    const result = await backendApi.updateStockService(userId, session.service, settings);
+    
+    // Test connection
+    await bot.editMessageText(
+      `🔍 Тестирую соединение с ${serviceName}...`,
+      { chat_id: chatId, message_id: savingMessage.message_id }
+    );
+    
+    try {
+      const testResult = await backendApi.testStockServiceConnection(userId, session.service);
+      
+      await bot.deleteMessage(chatId, savingMessage.message_id);
+      
+      if (testResult.success) {
+        const successMessage = `✅ *${serviceName} успешно настроен!*
+
+🎉 Соединение протестировано и работает.
+Теперь вы можете генерировать изображения и загружать их на ${serviceName}.
+
+Отправьте текстовое описание изображения для начала работы!`;
+        
+        await bot.sendMessage(chatId, successMessage, { parse_mode: 'Markdown' });
+      } else {
+        const warningMessage = `⚠️ *${serviceName} настроен, но есть проблемы с соединением*
+
+Настройки сохранены, но тест соединения не прошел:
+${testResult.message || 'Неизвестная ошибка'}
+
+Проверьте настройки и попробуйте позже.`;
+        
+        await bot.sendMessage(chatId, warningMessage, { parse_mode: 'Markdown' });
+      }
+    } catch (testError) {
+      await bot.deleteMessage(chatId, savingMessage.message_id);
+      
+      const warningMessage = `⚠️ *${serviceName} настроен, но тест соединения не удался*
+
+Настройки сохранены, но не удалось протестировать соединение.
+Вы можете попробовать загрузить изображение для проверки.`;
+      
+      await bot.sendMessage(chatId, warningMessage, { parse_mode: 'Markdown' });
+    }
+    
+    // Clear session
+    userSessions.delete(telegramUserId);
+    
+  } catch (error) {
+    console.error('Error saving stock service settings:', error.message);
+    
+    await bot.editMessageText(
+      `❌ Ошибка сохранения настроек ${serviceName}: ${error.message}`,
+      { chat_id: chatId, message_id: savingMessage.message_id }
+    );
+    
+    userSessions.delete(telegramUserId);
+  }
+}
+
+/**
  * Handle stock service setup
  */
 async function handleStockSetup(chatId, telegramUserId, userId, service) {
@@ -566,7 +853,12 @@ async function handleStockSetup(chatId, telegramUserId, userId, service) {
     data: {}
   });
   
-  const message = `🔧 *Настройка ${serviceName}*\n\nВведите ваш логин для ${serviceName}:`;
+  const message = `🔧 *Настройка ${serviceName}*
+
+Для настройки ${serviceName} потребуются учетные данные.
+Отправьте "отмена" в любой момент для прерывания.
+
+👤 Введите ваш логин для ${serviceName}:`;
   
   await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
 }
