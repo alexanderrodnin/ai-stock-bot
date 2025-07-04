@@ -131,7 +131,6 @@ function getImageActionsKeyboard(imageId, userId, availableServices = []) {
   }
   
   // Add management buttons
-  keyboard.push([{ text: "📊 Статус загрузок", callback_data: `status_${imageId}` }]);
   keyboard.push([{ text: "⚙️ Настройки стоков", callback_data: "manage_stocks" }]);
 
   return { inline_keyboard: keyboard };
@@ -201,9 +200,7 @@ bot.onText(/\/start/, async (msg) => {
 *Команды:*
 /help - справка по использованию
 /settings - настройки профиля и стоков
-/mystocks - управление стоковыми сервисами
-/myimages - история изображений
-/stats - статистика`;
+/mystocks - управление стоковыми сервисами`;
 
     await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
 
@@ -251,9 +248,7 @@ bot.onText(/\/help/, (msg) => {
 *Команды:*
 /start - начать работу
 /settings - настройки
-/mystocks - управление стоками
-/myimages - история изображений
-/stats - статистика`;
+/mystocks - управление стоками`;
 
   bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
 });
@@ -328,64 +323,7 @@ bot.onText(/\/mystocks/, async (msg) => {
   }
 });
 
-// My images command handler
-bot.onText(/\/myimages/, async (msg) => {
-  const chatId = msg.chat.id;
-  
-  try {
-    const user = await initializeUser(msg.from);
-    const imagesData = await backendApi.getUserImages(user.id, { limit: 10 });
-    
-    if (!imagesData.images || imagesData.images.length === 0) {
-      return bot.sendMessage(chatId, 
-        '📷 У вас пока нет сгенерированных изображений.\n\nОтправьте текстовое описание для создания первого изображения!'
-      );
-    }
 
-    let message = `📷 *Ваши изображения* (${imagesData.pagination.total})\n\n`;
-    
-    imagesData.images.slice(0, 5).forEach((image, index) => {
-      const date = new Date(image.createdAt).toLocaleDateString('ru-RU');
-      const uploadsCount = image.uploads?.length || 0;
-      message += `${index + 1}. ${image.prompt.substring(0, 50)}...\n`;
-      message += `   📅 ${date} | 📤 ${uploadsCount} загрузок\n\n`;
-    });
-
-    if (imagesData.pagination.total > 5) {
-      message += `... и еще ${imagesData.pagination.total - 5} изображений`;
-    }
-
-    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-  } catch (error) {
-    console.error('Error in /myimages command:', error.message);
-    await bot.sendMessage(chatId, '❌ Ошибка загрузки истории изображений.');
-  }
-});
-
-// Stats command handler
-bot.onText(/\/stats/, async (msg) => {
-  const chatId = msg.chat.id;
-  
-  try {
-    const user = await initializeUser(msg.from);
-    const stats = await backendApi.getUserStats(user.id);
-    
-    const message = `📊 *Ваша статистика*
-
-🎨 **Изображений сгенерировано:** ${stats.imagesGenerated || 0}
-📤 **Изображений загружено:** ${stats.imagesUploaded || 0}
-🔄 **Всего запросов:** ${stats.totalRequests || 0}
-📅 **Последняя активность:** ${new Date(stats.lastActivity).toLocaleDateString('ru-RU')}
-
-💳 **Подписка:** ${stats.subscription?.plan || 'free'}
-📈 **Лимиты:** ${stats.subscription?.usage?.imagesToday || 0}/${stats.subscription?.limits?.imagesPerDay || 10} сегодня`;
-
-    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-  } catch (error) {
-    console.error('Error in /stats command:', error.message);
-    await bot.sendMessage(chatId, '❌ Ошибка загрузки статистики.');
-  }
-});
 
 // Main message handler
 bot.on('message', async (msg) => {
@@ -552,8 +490,6 @@ bot.on('callback_query', async (callbackQuery) => {
       await showStockSetupMenu(chatId, user.id);
     } else if (data.startsWith('upload_')) {
       await handleImageUpload(callbackQuery, user);
-    } else if (data.startsWith('status_')) {
-      await handleStatusCheck(callbackQuery, user);
     }
     
     // Acknowledge the button press
@@ -915,39 +851,6 @@ async function handleImageUpload(callbackQuery, user) {
   }
 }
 
-/**
- * Handle status check
- */
-async function handleStatusCheck(callbackQuery, user) {
-  const chatId = callbackQuery.message.chat.id;
-  const data = callbackQuery.data;
-  
-  // Parse callback data: status_imageId
-  const imageId = data.split('_')[1];
-  
-  try {
-    const uploadStatus = await backendApi.getUploadStatus(imageId, user.id);
-    
-    let message = `📊 *Статус загрузок*\n\n`;
-    
-    if (!uploadStatus.uploads || uploadStatus.uploads.length === 0) {
-      message += 'Изображение еще не загружалось на стоковые сервисы.';
-    } else {
-      uploadStatus.uploads.forEach(upload => {
-        const status = upload.status === 'completed' ? '✅' : 
-                      upload.status === 'failed' ? '❌' : '⏳';
-        const date = new Date(upload.uploadedAt).toLocaleDateString('ru-RU');
-        message += `${status} **${upload.service.toUpperCase()}** - ${date}\n`;
-      });
-    }
-    
-    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-    
-  } catch (error) {
-    console.error('Error checking upload status:', error.message);
-    await bot.sendMessage(chatId, '❌ Ошибка получения статуса загрузок.');
-  }
-}
 
 /**
  * Show setup help
