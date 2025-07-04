@@ -321,7 +321,9 @@ class StockUploadService {
         throw new Error('User not found');
       }
 
-      const serviceConfig = user.getStockServiceConfig(service);
+      // Get user's stock service configuration using mapped service name
+      const mappedServiceName = this.serviceMapping[service];
+      const serviceConfig = user.getStockServiceConfig(mappedServiceName);
       if (!serviceConfig) {
         throw new Error(`${service} is not configured for this user`);
       }
