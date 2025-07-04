@@ -95,17 +95,17 @@ async function showStockSetupMenu(chatId, userId) {
   const keyboard = {
     inline_keyboard: [
       [{ text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }],
-      [{ text: "🔗 Привязать Shutterstock", callback_data: "setup_shutterstock" }],
-      [{ text: "🔗 Привязать Adobe Stock", callback_data: "setup_adobe" }],
+      // [{ text: "🔗 Привязать Shutterstock", callback_data: "setup_shutterstock" }],
+      // [{ text: "🔗 Привязать Adobe Stock", callback_data: "setup_adobe" }],
       [{ text: "ℹ️ Помощь по настройке", callback_data: "setup_help" }]
     ]
   };
 
   const message = `🔧 *Настройка стоковых сервисов*
 
-Для генерации изображений необходимо привязать хотя бы один стоковый сервис.
+Для генерации изображений необходимо привязать стоковый сервис 123RF.
 
-Выберите сервис для настройки:`;
+Выберите действие:`;
 
   await bot.sendMessage(chatId, message, {
     parse_mode: 'Markdown',
@@ -123,12 +123,12 @@ function getImageActionsKeyboard(imageId, userId, availableServices = []) {
   if (availableServices.includes('123rf')) {
     keyboard.push([{ text: "📤 Загрузить на 123RF", callback_data: `upload_123rf_${imageId}` }]);
   }
-  if (availableServices.includes('shutterstock')) {
-    keyboard.push([{ text: "📤 Загрузить на Shutterstock", callback_data: `upload_shutterstock_${imageId}` }]);
-  }
-  if (availableServices.includes('adobeStock')) {
-    keyboard.push([{ text: "📤 Загрузить на Adobe Stock", callback_data: `upload_adobe_${imageId}` }]);
-  }
+  // if (availableServices.includes('shutterstock')) {
+  //   keyboard.push([{ text: "📤 Загрузить на Shutterstock", callback_data: `upload_shutterstock_${imageId}` }]);
+  // }
+  // if (availableServices.includes('adobeStock')) {
+  //   keyboard.push([{ text: "📤 Загрузить на Adobe Stock", callback_data: `upload_adobe_${imageId}` }]);
+  // }
   
   // Add management buttons
   keyboard.push([{ text: "⚙️ Настройки стоков", callback_data: "manage_stocks" }]);
@@ -145,8 +145,8 @@ async function getAvailableStockServices(userId) {
     const available = [];
     
     if (stockServices.rf123?.enabled) available.push('123rf');
-    if (stockServices.shutterstock?.enabled) available.push('shutterstock');
-    if (stockServices.adobeStock?.enabled) available.push('adobeStock');
+    // if (stockServices.shutterstock?.enabled) available.push('shutterstock');
+    // if (stockServices.adobeStock?.enabled) available.push('adobeStock');
     
     return available;
   } catch (error) {
@@ -189,18 +189,16 @@ bot.onText(/\/start/, async (msg) => {
     
     const welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
 
-Я помогу вам генерировать изображения с помощью DALL·E 3 и загружать их на стоковые площадки.
+Я помогу вам генерировать изображения с помощью DALL·E 3 и загружать их на стоковую площадку 123RF.
 
 *Возможности:*
 • Генерация изображений по текстовому описанию
-• Автоматическая загрузка на 123RF, Shutterstock, Adobe Stock
-• Управление настройками стоковых сервисов
-• Отслеживание статуса загрузок
+• Автоматическая загрузка на 123RF
+• Управление настройками стокового сервиса
 
 *Команды:*
 /help - справка по использованию
-/settings - настройки профиля и стоков
-/mystocks - управление стоковыми сервисами`;
+/mystocks - управление стоковым сервисом`;
 
     await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
 
@@ -233,51 +231,25 @@ bot.onText(/\/help/, (msg) => {
 *Генерация изображений:*
 1. Отправьте текстовое описание изображения
 2. Дождитесь генерации (может занять до 30 секунд)
-3. Выберите стоковый сервис для загрузки
+3. Загрузите изображение на 123RF
 
 *Настройка стоков:*
-• Используйте /mystocks для управления сервисами
-• Для каждого сервиса нужны учетные данные
+• Используйте /mystocks для управления сервисом 123RF
+• Нужны учетные данные от аккаунта 123RF
 • Можно настроить автоматическую загрузку
 
 *Ограничения:*
 • Промт должен быть текстовым и до 1000 символов
 • Изображения генерируются в формате 1024x1024
-• Соблюдайте правила контента стоковых площадок
+• Соблюдайте правила контента стоковой площадки 123RF
 
 *Команды:*
 /start - начать работу
-/settings - настройки
-/mystocks - управление стоками`;
+/mystocks - управление стоковым сервисом`;
 
   bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
 });
 
-// Settings command handler
-bot.onText(/\/settings/, async (msg) => {
-  const chatId = msg.chat.id;
-  
-  try {
-    const user = await initializeUser(msg.from);
-    
-    const keyboard = {
-      inline_keyboard: [
-        [{ text: "🎨 Настройки генерации", callback_data: "settings_generation" }],
-        [{ text: "📤 Настройки загрузки", callback_data: "settings_upload" }],
-        [{ text: "🔔 Уведомления", callback_data: "settings_notifications" }],
-        [{ text: "🔗 Стоковые сервисы", callback_data: "manage_stocks" }]
-      ]
-    };
-
-    await bot.sendMessage(chatId, 
-      `⚙️ *Настройки профиля*\n\nВыберите категорию настроек:`, 
-      { parse_mode: 'Markdown', reply_markup: keyboard }
-    );
-  } catch (error) {
-    console.error('Error in /settings command:', error.message);
-    await bot.sendMessage(chatId, '❌ Ошибка загрузки настроек.');
-  }
-});
 
 // My stocks command handler
 bot.onText(/\/mystocks/, async (msg) => {
@@ -287,31 +259,35 @@ bot.onText(/\/mystocks/, async (msg) => {
     const user = await initializeUser(msg.from);
     const stockServices = await backendApi.getStockServices(user.id);
     
-    let message = `📊 *Ваши стоковые сервисы*\n\n`;
+    let message = `📊 *Управление стоковыми сервисами*\n\n`;
+    
+    const keyboard = {
+      inline_keyboard: []
+    };
     
     // 123RF
     const rf123Status = stockServices.rf123?.enabled ? '✅ Активен' : '❌ Не настроен';
-    message += `🔸 **123RF**: ${rf123Status}\n`;
+    message += `🔸 **123RF**: ${rf123Status}\n\n`;
     
-    // Shutterstock
-    const shutterstockStatus = stockServices.shutterstock?.enabled ? '✅ Активен' : '❌ Не настроен';
-    message += `🔸 **Shutterstock**: ${shutterstockStatus}\n`;
-    
-    // Adobe Stock
-    const adobeStatus = stockServices.adobeStock?.enabled ? '✅ Активен' : '❌ Не настроен';
-    message += `🔸 **Adobe Stock**: ${adobeStatus}\n\n`;
-    
-    const hasActiveServices = await backendApi.hasActiveStockServices(user.id);
-    if (!hasActiveServices) {
-      message += `⚠️ *Нет активных сервисов*\nДля генерации изображений необходимо настроить хотя бы один стоковый сервис.`;
+    if (stockServices.rf123?.enabled) {
+      // Если сервис привязан - показываем кнопки управления
+      message += `Сервис 123RF настроен и готов к работе.`;
+      keyboard.inline_keyboard.push([
+        { text: "👁️ Посмотреть 123RF", callback_data: "view_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "✏️ Изменить данные 123RF", callback_data: "edit_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "🗑️ Удалить 123RF", callback_data: "delete_rf123" }
+      ]);
+    } else {
+      // Если сервис не привязан - показываем только кнопку привязки
+      message += `⚠️ *Сервис не настроен*\nДля генерации изображений необходимо привязать стоковый сервис 123RF.`;
+      keyboard.inline_keyboard.push([
+        { text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }
+      ]);
     }
-
-    const keyboard = {
-      inline_keyboard: [
-        [{ text: "🔗 Добавить сервис", callback_data: "manage_stocks" }],
-        [{ text: "🔧 Настроить существующий", callback_data: "configure_existing" }]
-      ]
-    };
 
     await bot.sendMessage(chatId, message, {
       parse_mode: 'Markdown',
@@ -319,7 +295,7 @@ bot.onText(/\/mystocks/, async (msg) => {
     });
   } catch (error) {
     console.error('Error in /mystocks command:', error.message);
-    await bot.sendMessage(chatId, '❌ Ошибка загрузки информации о стоках.');
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки информации о стоков.');
   }
 });
 
@@ -337,7 +313,7 @@ bot.on('message', async (msg) => {
 
   // Check if user is in a setup session
   const session = userSessions.get(telegramUserId);
-  if (session && session.action === 'setup_stock') {
+  if (session && (session.action === 'setup_stock' || session.action === 'edit_stock')) {
     return handleSetupStep(msg, session);
   }
 
@@ -480,14 +456,26 @@ bot.on('callback_query', async (callbackQuery) => {
     // Handle different callback data
     if (data === 'setup_123rf') {
       await handleStockSetup(chatId, userId, user.id, '123rf');
-    } else if (data === 'setup_shutterstock') {
-      await handleStockSetup(chatId, userId, user.id, 'shutterstock');
-    } else if (data === 'setup_adobe') {
-      await handleStockSetup(chatId, userId, user.id, 'adobeStock');
+    // } else if (data === 'setup_shutterstock') {
+    //   await handleStockSetup(chatId, userId, user.id, 'shutterstock');
+    // } else if (data === 'setup_adobe') {
+    //   await handleStockSetup(chatId, userId, user.id, 'adobeStock');
     } else if (data === 'setup_help') {
       await showSetupHelp(chatId);
     } else if (data === 'manage_stocks') {
       await showStockSetupMenu(chatId, user.id);
+    } else if (data === 'configure_existing') {
+      await showConfigureExistingMenu(chatId, user.id);
+    } else if (data.startsWith('view_')) {
+      await handleViewStock(callbackQuery, user);
+    } else if (data.startsWith('delete_')) {
+      await handleDeleteStock(callbackQuery, user);
+    } else if (data.startsWith('edit_')) {
+      await handleEditStock(callbackQuery, user);
+    } else if (data.startsWith('confirm_delete_')) {
+      await handleConfirmDelete(callbackQuery, user);
+    } else if (data === 'cancel_delete') {
+      await bot.sendMessage(chatId, '❌ Удаление отменено.');
     } else if (data.startsWith('upload_')) {
       await handleImageUpload(callbackQuery, user);
     }
@@ -519,9 +507,9 @@ async function handleSetupStep(msg, session) {
   }
   
   const serviceNames = {
-    '123rf': '123RF',
-    'shutterstock': 'Shutterstock',
-    'adobeStock': 'Adobe Stock'
+    '123rf': '123RF'
+    // 'shutterstock': 'Shutterstock',
+    // 'adobeStock': 'Adobe Stock'
   };
   
   const serviceName = serviceNames[session.service];
@@ -532,24 +520,54 @@ async function handleSetupStep(msg, session) {
     
     switch (session.step) {
       case 'username':
-        if (!input) {
-          return bot.sendMessage(chatId, '❌ Логин не может быть пустым. Попробуйте еще раз:');
+        // Handle editing mode
+        if (session.action === 'edit_stock') {
+          if (input.toLowerCase() === 'пропустить' || input.toLowerCase() === 'skip') {
+            // Keep current username
+            session.data.username = session.data.currentData.username;
+          } else if (!input) {
+            return bot.sendMessage(chatId, '❌ Логин не может быть пустым. Попробуйте еще раз или отправьте "пропустить":');
+          } else {
+            session.data.username = input;
+          }
+          
+          session.step = 'password';
+          await bot.sendMessage(chatId, 
+            `✅ Логин: ${session.data.username}\n\n🔐 Введите новый пароль для ${serviceName} или отправьте "пропустить" чтобы оставить текущий:`
+          );
+        } else {
+          // Handle setup mode
+          if (!input) {
+            return bot.sendMessage(chatId, '❌ Логин не может быть пустым. Попробуйте еще раз:');
+          }
+          
+          session.data.username = input;
+          session.step = 'password';
+          
+          await bot.sendMessage(chatId, 
+            `✅ Логин сохранен: ${input}\n\n🔐 Теперь введите пароль для ${serviceName}:`
+          );
         }
-        
-        session.data.username = input;
-        session.step = 'password';
-        
-        await bot.sendMessage(chatId, 
-          `✅ Логин сохранен: ${input}\n\n🔐 Теперь введите пароль для ${serviceName}:`
-        );
         break;
         
       case 'password':
-        if (!input) {
-          return bot.sendMessage(chatId, '❌ Пароль не может быть пустым. Попробуйте еще раз:');
+        // Handle editing mode
+        if (session.action === 'edit_stock') {
+          if (input.toLowerCase() === 'пропустить' || input.toLowerCase() === 'skip') {
+            // Keep current password
+            session.data.password = session.data.currentData.password || '';
+          } else if (!input) {
+            return bot.sendMessage(chatId, '❌ Пароль не может быть пустым. Попробуйте еще раз или отправьте "пропустить":');
+          } else {
+            session.data.password = input;
+          }
+        } else {
+          // Handle setup mode
+          if (!input) {
+            return bot.sendMessage(chatId, '❌ Пароль не может быть пустым. Попробуйте еще раз:');
+          }
+          session.data.password = input;
         }
-        
-        session.data.password = input;
         
         // Different next steps based on service
         if (session.service === '123rf') {
@@ -561,10 +579,11 @@ async function handleSetupStep(msg, session) {
           session.data.remotePath = '/ai_images';
           
           // Show confirmation for 123RF with default settings
+          const passwordLength = (session.data.password || '').length;
           const rf123ConfirmMessage = `📋 Проверьте настройки ${serviceName}:
 
 👤 Логин: ${session.data.username}
-🔐 Пароль: ${'*'.repeat(session.data.password.length)}
+🔐 Пароль: ${'*'.repeat(passwordLength)}
 🌐 FTP хост: ${session.data.ftpHost} (автоматически)
 🔌 FTP порт: ${session.data.ftpPort} (автоматически)
 📁 Путь: ${session.data.remotePath} (автоматически)
@@ -664,9 +683,9 @@ async function handleSetupStep(msg, session) {
  */
 async function saveStockServiceSettings(chatId, telegramUserId, userId, session) {
   const serviceNames = {
-    '123rf': '123RF',
-    'shutterstock': 'Shutterstock',
-    'adobeStock': 'Adobe Stock'
+    '123rf': '123RF'
+    // 'shutterstock': 'Shutterstock',
+    // 'adobeStock': 'Adobe Stock'
   };
   
   const serviceName = serviceNames[session.service];
@@ -719,31 +738,57 @@ async function saveStockServiceSettings(chatId, telegramUserId, userId, session)
       await bot.deleteMessage(chatId, savingMessage.message_id);
       
       if (testResult.success) {
-        const successMessage = `✅ *${serviceName} успешно настроен!*
+        let successMessage;
+        if (session.action === 'edit_stock') {
+          successMessage = `✅ *Данные ${serviceName} успешно обновлены!*
+
+🎉 Соединение протестировано и работает.
+Новые настройки сохранены и готовы к использованию.`;
+        } else {
+          successMessage = `✅ *${serviceName} успешно настроен!*
 
 🎉 Соединение протестировано и работает.
 Теперь вы можете генерировать изображения и загружать их на ${serviceName}.
 
 Отправьте текстовое описание изображения для начала работы!`;
+        }
         
         await bot.sendMessage(chatId, successMessage, { parse_mode: 'Markdown' });
       } else {
-        const warningMessage = `⚠️ *${serviceName} настроен, но есть проблемы с соединением*
+        let warningMessage;
+        if (session.action === 'edit_stock') {
+          warningMessage = `⚠️ *Данные ${serviceName} обновлены, но есть проблемы с соединением*
 
 Настройки сохранены, но тест соединения не прошел:
 ${testResult.message || 'Неизвестная ошибка'}
 
 Проверьте настройки и попробуйте позже.`;
+        } else {
+          warningMessage = `⚠️ *${serviceName} настроен, но есть проблемы с соединением*
+
+Настройки сохранены, но тест соединения не прошел:
+${testResult.message || 'Неизвестная ошибка'}
+
+Проверьте настройки и попробуйте позже.`;
+        }
         
         await bot.sendMessage(chatId, warningMessage, { parse_mode: 'Markdown' });
       }
     } catch (testError) {
       await bot.deleteMessage(chatId, savingMessage.message_id);
       
-      const warningMessage = `⚠️ *${serviceName} настроен, но тест соединения не удался*
+      let warningMessage;
+      if (session.action === 'edit_stock') {
+        warningMessage = `⚠️ *Данные ${serviceName} обновлены, но тест соединения не удался*
 
 Настройки сохранены, но не удалось протестировать соединение.
 Вы можете попробовать загрузить изображение для проверки.`;
+      } else {
+        warningMessage = `⚠️ *${serviceName} настроен, но тест соединения не удался*
+
+Настройки сохранены, но не удалось протестировать соединение.
+Вы можете попробовать загрузить изображение для проверки.`;
+      }
       
       await bot.sendMessage(chatId, warningMessage, { parse_mode: 'Markdown' });
     }
@@ -768,9 +813,9 @@ ${testResult.message || 'Неизвестная ошибка'}
  */
 async function handleStockSetup(chatId, telegramUserId, userId, service) {
   const serviceNames = {
-    '123rf': '123RF',
-    'shutterstock': 'Shutterstock',
-    'adobeStock': 'Adobe Stock'
+    '123rf': '123RF'
+    // 'shutterstock': 'Shutterstock',
+    // 'adobeStock': 'Adobe Stock'
   };
   
   const serviceName = serviceNames[service];
@@ -853,25 +898,251 @@ async function handleImageUpload(callbackQuery, user) {
 
 
 /**
+ * Show configure existing menu
+ */
+async function showConfigureExistingMenu(chatId, userId) {
+  try {
+    const stockServices = await backendApi.getStockServices(userId);
+    
+    const keyboard = {
+      inline_keyboard: []
+    };
+    
+    let message = `🔧 *Настройка существующих сервисов*\n\nВыберите сервис для редактирования:\n\n`;
+    
+    // Add edit buttons for active services
+    if (stockServices.rf123?.enabled) {
+      message += `✅ **123RF** - активен\n`;
+      keyboard.inline_keyboard.push([{ text: "✏️ Редактировать 123RF", callback_data: "edit_rf123" }]);
+    }
+    
+    // if (stockServices.shutterstock?.enabled) {
+    //   message += `✅ **Shutterstock** - активен\n`;
+    //   keyboard.inline_keyboard.push([{ text: "✏️ Редактировать Shutterstock", callback_data: "edit_shutterstock" }]);
+    // }
+    
+    // if (stockServices.adobeStock?.enabled) {
+    //   message += `✅ **Adobe Stock** - активен\n`;
+    //   keyboard.inline_keyboard.push([{ text: "✏️ Редактировать Adobe Stock", callback_data: "edit_adobeStock" }]);
+    // }
+    
+    if (keyboard.inline_keyboard.length === 0) {
+      message = `❌ *Нет активных сервисов для редактирования*\n\nСначала добавьте стоковый сервис.`;
+      keyboard.inline_keyboard.push([{ text: "🔗 Добавить сервис", callback_data: "manage_stocks" }]);
+    }
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error showing configure existing menu:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки списка сервисов.');
+  }
+}
+
+/**
+ * Handle view stock details
+ */
+async function handleViewStock(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const service = callbackQuery.data.split('_')[1]; // view_rf123 -> rf123
+  
+  try {
+    const stockServices = await backendApi.getStockServices(user.id);
+    const serviceData = stockServices[service];
+    
+    if (!serviceData || !serviceData.enabled) {
+      return bot.sendMessage(chatId, '❌ Сервис не найден или не активен.');
+    }
+    
+    const serviceNames = {
+      'rf123': '123RF',
+      'shutterstock': 'Shutterstock',
+      'adobeStock': 'Adobe Stock'
+    };
+    
+    const serviceName = serviceNames[service];
+    
+    let message = `👁️ *Информация о ${serviceName}*\n\n`;
+    message += `📊 **Статус:** ✅ Активен\n`;
+    message += `👤 **Логин:** ${serviceData.credentials.username}\n`;
+    message += `🔐 **Пароль:** ${'*'.repeat((serviceData.credentials.password || '').length)}\n`;
+    
+    if (service === '123rf') {
+      message += `🌐 **FTP хост:** ${serviceData.credentials.ftpHost}\n`;
+      message += `🔌 **FTP порт:** ${serviceData.credentials.ftpPort}\n`;
+      message += `📁 **Путь:** ${serviceData.credentials.remotePath}\n`;
+    } else if (service === 'shutterstock') {
+      message += `🔑 **API ключ:** ${serviceData.credentials.apiKey.substring(0, 8)}...\n`;
+    } else if (service === 'adobeStock') {
+      message += `🔑 **API ключ:** ${serviceData.credentials.apiKey.substring(0, 8)}...\n`;
+      message += `🔐 **API секрет:** ${serviceData.credentials.secret.substring(0, 8)}...\n`;
+    }
+    
+    message += `\n⚙️ **Настройки:**\n`;
+    message += `• Автозагрузка: ${serviceData.settings.autoUpload ? '✅' : '❌'}\n`;
+    message += `• Ценовая категория: ${serviceData.settings.pricing}\n`;
+    
+    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    console.error('Error viewing stock details:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки информации о сервисе.');
+  }
+}
+
+/**
+ * Handle delete stock service
+ */
+async function handleDeleteStock(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const service = callbackQuery.data.split('_')[1]; // delete_rf123 -> rf123
+  
+  const serviceNames = {
+    'rf123': '123RF',
+    'shutterstock': 'Shutterstock',
+    'adobeStock': 'Adobe Stock'
+  };
+  
+  const serviceName = serviceNames[service];
+  
+  try {
+    // Show confirmation dialog
+    const keyboard = {
+      inline_keyboard: [
+        [
+          { text: "✅ Да, удалить", callback_data: `confirm_delete_${service}` },
+          { text: "❌ Отмена", callback_data: "cancel_delete" }
+        ]
+      ]
+    };
+    
+    const message = `⚠️ *Подтверждение удаления*\n\nВы действительно хотите удалить настройки для ${serviceName}?\n\nЭто действие нельзя отменить.`;
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+    
+  } catch (error) {
+    console.error('Error handling delete stock:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка при удалении сервиса.');
+  }
+}
+
+/**
+ * Handle edit stock service
+ */
+async function handleEditStock(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const telegramUserId = callbackQuery.from.id;
+  const service = callbackQuery.data.split('_')[1]; // edit_rf123 -> rf123
+  
+  const serviceNames = {
+    'rf123': '123RF',
+    'shutterstock': 'Shutterstock',
+    'adobeStock': 'Adobe Stock'
+  };
+  
+  // Map internal service names to external API names for session
+  const serviceApiMapping = {
+    'rf123': '123rf',
+    'shutterstock': 'shutterstock',
+    'adobeStock': 'adobeStock'
+  };
+  
+  const serviceName = serviceNames[service];
+  const apiServiceName = serviceApiMapping[service];
+  
+  try {
+    // Get current service data
+    const stockServices = await backendApi.getStockServices(user.id);
+    const serviceData = stockServices[service];
+    
+    if (!serviceData || !serviceData.enabled) {
+      return bot.sendMessage(chatId, '❌ Сервис не найден или не активен.');
+    }
+    
+    // Store session data for editing - use API service name for backend calls
+    userSessions.set(telegramUserId, {
+      action: 'edit_stock',
+      service: apiServiceName, // Use API service name for backend calls
+      step: 'username',
+      data: {
+        currentData: serviceData.credentials
+      }
+    });
+    
+    const message = `✏️ *Редактирование ${serviceName}*\n\nТекущий логин: ${serviceData.credentials.username}\n\nВведите новый логин или отправьте "пропустить" чтобы оставить текущий:`;
+    
+    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    console.error('Error handling edit stock:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка при редактировании сервиса.');
+  }
+}
+
+/**
+ * Handle confirm delete stock service
+ */
+async function handleConfirmDelete(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const service = callbackQuery.data.split('_')[2]; // confirm_delete_rf123 -> rf123
+  
+  // Map internal service names to external API names
+  const serviceApiMapping = {
+    'rf123': '123rf',
+    'shutterstock': 'shutterstock',
+    'adobeStock': 'adobeStock'
+  };
+  
+  const serviceNames = {
+    'rf123': '123RF',
+    'shutterstock': 'Shutterstock',
+    'adobeStock': 'Adobe Stock'
+  };
+  
+  const serviceName = serviceNames[service];
+  const apiServiceName = serviceApiMapping[service];
+  
+  try {
+    const deletingMessage = await bot.sendMessage(chatId, 
+      `🗑️ Удаляю настройки ${serviceName}...`
+    );
+    
+    // Delete the stock service via backend API using correct service name
+    await backendApi.deleteStockService(user.id, apiServiceName);
+    
+    await bot.deleteMessage(chatId, deletingMessage.message_id);
+    
+    const successMessage = `✅ *Настройки ${serviceName} успешно удалены*\n\nСервис отвязан от вашего аккаунта.`;
+    
+    await bot.sendMessage(chatId, successMessage, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    console.error('Error deleting stock service:', error.message);
+    await bot.sendMessage(chatId, `❌ Ошибка удаления ${serviceName}: ${error.message}`);
+  }
+}
+
+/**
  * Show setup help
  */
 async function showSetupHelp(chatId) {
-  const helpMessage = `ℹ️ *Помощь по настройке стоков*
+  const helpMessage = `ℹ️ *Помощь по настройке 123RF*
 
 **123RF:**
 • Нужен только логин и пароль от аккаунта
 • FTP настройки устанавливаются автоматически
 • Обычно совпадают с данными для входа на сайт
+• Поддерживается автоматическая загрузка изображений
 
-**Shutterstock:**
-• Требуется API ключ
-• Получить можно в настройках аккаунта
-• Раздел "API Access"
-
-**Adobe Stock:**
-• Нужен API ключ и секрет
-• Настраивается в Adobe Developer Console
-• Требуется верификация аккаунта
+**Как получить данные:**
+1. Зайдите на сайт 123RF.com
+2. Используйте свой обычный логин и пароль
+3. Убедитесь, что у вас есть права на загрузку контента
 
 *Все данные хранятся в зашифрованном виде и используются только для загрузки ваших изображений.*`;
 

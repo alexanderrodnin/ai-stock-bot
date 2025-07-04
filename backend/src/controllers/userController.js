@@ -569,6 +569,101 @@ class UserController {
   }
 
   /**
+   * Delete stock service settings
+   * DELETE /api/users/:userId/stock-services/:service
+   */
+  async deleteStockServiceSettings(req, res) {
+    const { userId, service } = req.params;
+
+    // Map external service names to internal names
+    const serviceMapping = {
+      '123rf': 'rf123',
+      'shutterstock': 'shutterstock',
+      'adobeStock': 'adobeStock'
+    };
+
+    const internalServiceName = serviceMapping[service];
+    if (!internalServiceName) {
+      return res.status(400).json({
+        success: false,
+        error: {
+          message: `Invalid stock service: ${service}`,
+          code: 'INVALID_SERVICE'
+        }
+      });
+    }
+
+    logger.info('Delete stock service settings request', {
+      userId,
+      service,
+      internalServiceName
+    });
+
+    try {
+      const user = await User.findById(userId);
+
+      if (!user || user.status === 'deleted') {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          }
+        });
+      }
+
+      // Check if stock service exists
+      if (!user.stockServices || !user.stockServices[internalServiceName]) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: `Stock service ${service} not found`,
+            code: 'STOCK_SERVICE_NOT_FOUND'
+          }
+        });
+      }
+
+      // Reset the stock service to default state instead of deleting
+      user.stockServices[internalServiceName] = {
+        enabled: false,
+        credentials: {},
+        settings: {
+          autoUpload: false,
+          defaultKeywords: []
+        }
+      };
+
+      // Mark the field as modified to ensure Mongoose saves the changes
+      user.markModified(`stockServices.${internalServiceName}`);
+
+      await user.save();
+
+      logger.info('Stock service settings deleted', { userId, service, internalServiceName });
+
+      res.status(200).json({
+        success: true,
+        message: `${service} settings deleted successfully`
+      });
+
+    } catch (error) {
+      logger.error('Failed to delete stock service settings', {
+        error: error.message,
+        userId,
+        service
+      });
+
+      res.status(500).json({
+        success: false,
+        error: {
+          message: 'Failed to delete stock service settings',
+          code: 'DELETE_STOCK_SETTINGS_FAILED',
+          details: error.message
+        }
+      });
+    }
+  }
+
+  /**
    * Get user statistics
    * GET /api/users/:userId/stats
    */

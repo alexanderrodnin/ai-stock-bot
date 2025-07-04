@@ -76,6 +76,7 @@ router.get('/', (req, res) => {
         updatePreferences: 'PUT /api/users/:userId/preferences',
         getStockServices: 'GET /api/users/:userId/stock-services',
         updateStockService: 'PUT /api/users/:userId/stock-services/:service',
+        deleteStockService: 'DELETE /api/users/:userId/stock-services/:service',
         testStockService: 'POST /api/users/:userId/stock-services/:service/test',
         getStats: 'GET /api/users/:userId/stats',
         updateSubscription: 'PUT /api/users/:userId/subscription',

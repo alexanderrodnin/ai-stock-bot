@@ -263,6 +263,20 @@ router.post('/:userId/stock-services/:service/test', [
 ], asyncHandler(userController.testStockServiceConnection));
 
 /**
+ * @route   DELETE /api/users/:userId/stock-services/:service
+ * @desc    Delete stock service settings
+ * @access  Public
+ */
+router.delete('/:userId/stock-services/:service', [
+  param('userId')
+    .isMongoId()
+    .withMessage('Invalid user ID format'),
+  param('service')
+    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .withMessage('Invalid stock service')
+], asyncHandler(userController.deleteStockServiceSettings));
+
+/**
  * @route   GET /api/users/:userId/stats
  * @desc    Get user statistics
  * @access  Public

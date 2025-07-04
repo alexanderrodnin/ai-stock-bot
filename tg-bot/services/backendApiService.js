@@ -167,6 +167,22 @@ class BackendApiService {
   }
 
   /**
+   * Delete stock service
+   * @param {string} userId User ID
+   * @param {string} service Service name ('123rf', 'shutterstock', 'adobeStock')
+   * @returns {Promise<Object>} Delete result
+   */
+  async deleteStockService(userId, service) {
+    try {
+      const response = await this.client.delete(`/users/${userId}/stock-services/${service}`);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error deleting stock service:', error.message);
+      throw new Error(`Failed to delete stock service: ${error.message}`);
+    }
+  }
+
+  /**
    * Generate image
    * @param {Object} imageData Image generation data
    * @param {string} imageData.userId User ID
