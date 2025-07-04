@@ -203,11 +203,23 @@ bot.onText(/\/start/, async (msg) => {
 /settings - настройки профиля и стоков
 /mystocks - управление стоковыми сервисами
 /myimages - история изображений
-/stats - статистика
-
-Для начала работы отправьте текстовое описание изображения!`;
+/stats - статистика`;
 
     await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+
+    // Check if user has active stock services
+    const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
+    if (!hasActiveStocks) {
+      await bot.sendMessage(chatId, 
+        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
+        { parse_mode: 'Markdown' }
+      );
+      return showStockSetupMenu(chatId, user.id);
+    } else {
+      await bot.sendMessage(chatId, 
+        '\n✅ Стоковые сервисы настроены. Отправьте текстовое описание изображения для начала работы!'
+      );
+    }
   } catch (error) {
     console.error('Error in /start command:', error.message);
     await bot.sendMessage(chatId, 
@@ -413,33 +425,28 @@ bot.on('message', async (msg) => {
     return;
   }
 
-  // Notify user that processing has started
-  const processingMessage = await bot.sendMessage(chatId, '🎨 Генерирую изображение, пожалуйста подождите...');
-
   try {
-    // Check backend health
+    // Check backend health first
     const backendAvailable = await checkBackendHealth();
     if (!backendAvailable) {
-      await bot.editMessageText(
-        '⚠️ Сервис временно недоступен. Попробуйте позже.',
-        { chat_id: chatId, message_id: processingMessage.message_id }
-      );
-      return;
+      return bot.sendMessage(chatId, '⚠️ Сервис временно недоступен. Попробуйте позже.');
     }
 
     // Initialize user
     const user = await initializeUser(msg.from);
     
-    // Check if user has active stock services
+    // Check if user has active stock services BEFORE starting generation
     const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
     if (!hasActiveStocks) {
-      await bot.deleteMessage(chatId, processingMessage.message_id);
       await bot.sendMessage(chatId, 
         '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
         { parse_mode: 'Markdown' }
       );
       return showStockSetupMenu(chatId, user.id);
     }
+
+    // Only start processing if user has active stocks
+    const processingMessage = await bot.sendMessage(chatId, '🎨 Генерирую изображение, пожалуйста подождите...');
 
     console.log('Generating image for prompt:', prompt);
     
@@ -498,7 +505,15 @@ bot.on('message', async (msg) => {
     
     let errorMessage = '❌ Не удалось сгенерировать изображение. ';
     
-    if (error.message.includes('Backend health check failed')) {
+    if (error.message.includes('NO_ACTIVE_STOCK_SERVICES')) {
+      // This should not happen due to frontend check, but handle it anyway
+      await bot.deleteMessage(chatId, processingMessage.message_id);
+      await bot.sendMessage(chatId, 
+        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
+        { parse_mode: 'Markdown' }
+      );
+      return showStockSetupMenu(chatId, user.id);
+    } else if (error.message.includes('Backend health check failed')) {
       errorMessage += 'Сервис временно недоступен.';
     } else if (error.message.includes('Failed to generate image')) {
       errorMessage += 'Ошибка генерации. Попробуйте изменить описание.';

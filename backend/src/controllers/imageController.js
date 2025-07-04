@@ -57,6 +57,30 @@ class ImageController {
     });
 
     try {
+      // Check if user has active stock services before generating image
+      if (userId) {
+        const user = await User.findById(userId);
+        if (user) {
+          const hasActiveStocks = user.stockServices && 
+            Object.values(user.stockServices).some(service => service.enabled === true);
+          
+          if (!hasActiveStocks) {
+            logger.warn('Image generation blocked - no active stock services', {
+              userId,
+              userExternalId
+            });
+            
+            return res.status(400).json({
+              success: false,
+              error: {
+                message: 'At least one stock service must be configured before generating images',
+                code: 'NO_ACTIVE_STOCK_SERVICES'
+              }
+            });
+          }
+        }
+      }
+
       // Generate image using ImageService
       const result = await imageService.generateImage({
         prompt,
