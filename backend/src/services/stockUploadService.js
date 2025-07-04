@@ -147,8 +147,16 @@ class StockUploadService {
     try {
       logger.info('Starting 123RF upload', {
         imageId: image.id,
-        filename: image.file.filename
+        filename: image.file.filename,
+        filePath: image.file.path
       });
+
+      // Check if file exists
+      try {
+        await fs.access(image.file.path);
+      } catch (fileError) {
+        throw new Error(`Image file not found at path: ${image.file.path}`);
+      }
 
       // Connect to FTP server
       await client.access({
@@ -159,10 +167,16 @@ class StockUploadService {
         secure: false
       });
 
+      logger.info('FTP connection established', {
+        host: serviceConfig.credentials.ftpHost,
+        user: serviceConfig.credentials.username
+      });
+
       // Ensure remote directory exists
       const remotePath = serviceConfig.credentials.remotePath || '/uploads';
       try {
         await client.ensureDir(remotePath);
+        logger.info('Remote directory ensured', { remotePath });
       } catch (dirError) {
         logger.warn('Could not ensure remote directory', {
           remotePath,
@@ -173,11 +187,24 @@ class StockUploadService {
       // Generate remote filename
       const timestamp = Date.now();
       const extension = path.extname(image.file.filename);
-      const remoteFileName = `${settings.title || 'ai_image'}_${timestamp}${extension}`;
+      // Clean title for filename - remove spaces and special characters
+      const cleanTitle = this.sanitizeFilename(settings.title || 'ai_image');
+      const remoteFileName = `${cleanTitle}_${timestamp}${extension}`;
       const remoteFilePath = path.posix.join(remotePath, remoteFileName);
+
+      logger.info('Uploading file', {
+        localPath: image.file.path,
+        remotePath: remoteFilePath,
+        remoteFileName
+      });
 
       // Upload file
       await client.uploadFrom(image.file.path, remoteFilePath);
+
+      logger.info('File uploaded successfully', {
+        remoteFilePath,
+        remoteFileName
+      });
 
       // Create metadata file if required
       if (settings.title || settings.description || settings.keywords) {
@@ -268,6 +295,21 @@ class StockUploadService {
       uploadUrl: 'https://contributor.stock.adobe.com/...',
       status: 'pending_review'
     };
+  }
+
+  /**
+   * Sanitize filename by removing spaces and special characters
+   * @param {string} filename - Original filename
+   * @returns {string} Sanitized filename
+   */
+  sanitizeFilename(filename) {
+    return filename
+      .replace(/\s+/g, '_')           // Replace spaces with underscores
+      .replace(/[^\w\-_]/g, '')       // Remove special characters except word chars, hyphens, underscores (removed dots)
+      .replace(/_{2,}/g, '_')         // Replace multiple underscores with single underscore
+      .replace(/^_+|_+$/g, '')        // Remove leading/trailing underscores
+      .toLowerCase()                  // Convert to lowercase
+      .substring(0, 50);              // Limit length to 50 characters
   }
 
   /**

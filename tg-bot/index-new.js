@@ -485,10 +485,17 @@ bot.on('callback_query', async (callbackQuery) => {
     
   } catch (error) {
     console.error('Error handling callback query:', error.message);
-    await bot.answerCallbackQuery(callbackQuery.id, {
-      text: 'Произошла ошибка. Попробуйте позже.',
-      show_alert: true
-    });
+    
+    // Try to acknowledge the callback query even if there was an error
+    try {
+      await bot.answerCallbackQuery(callbackQuery.id, {
+        text: 'Произошла ошибка. Попробуйте позже.',
+        show_alert: true
+      });
+    } catch (ackError) {
+      // If acknowledgment fails (e.g., query too old), just log it
+      console.error('Failed to acknowledge callback query:', ackError.message);
+    }
   }
 });
 

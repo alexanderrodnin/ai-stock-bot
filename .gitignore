@@ -111,3 +111,6 @@ Thumbs.db
 build/
 dist/
 out/
+
+# Test files with sensitive data
+test-upload-debug.js
