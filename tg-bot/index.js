@@ -277,7 +277,7 @@ bot.onText(/\/help/, (msg) => {
 
 *Ограничения:*
 • Промт должен быть текстовым и до 1000 символов
-• Изображения генерируются в формате 1024x1024
+• Изображения обрабатываются в формате 4000x4000 для загрузки
 • Соблюдайте правила контента стоковой площадки 123RF
 
 *Команды:*
@@ -425,11 +425,24 @@ bot.on('message', async (msg) => {
       // Get available stock services for this user
       const availableServices = await getAvailableStockServices(user.id);
       
-      // Create caption
-      let caption = `🎨 Изображение сгенерировано!\n\n`;
+      // Create caption based on whether it's a fallback/demo image
+      let caption;
+      const isFallbackOrDemo = (
+        (imageData.usedSource && (imageData.usedSource.includes('Fallback') || imageData.usedSource.includes('Demo'))) ||
+        (imageData.fallbackReason && imageData.fallbackReason !== 'None') ||
+        DEMO_MODE ||
+        demoModeActivatedByError
+      );
+      
+      if (isFallbackOrDemo) {
+        caption = `🎨 Демо-изображение сгенерировано!\n\n`;
+        caption += `⚠️ *Это тестовое изображение* (OpenAI API недоступен)\n\n`;
+      } else {
+        caption = `🎨 Изображение сгенерировано!\n\n`;
+      }
       caption += `📝 **Промт:** ${prompt}\n`;
       caption += `🤖 **Модель:** ${imageData.model}\n`;
-      caption += `📐 **Размер:** ${imageData.size}`;
+      caption += `📐 **Размер:** 4000x4000`;
       
       // Create inline keyboard with upload options
       const keyboard = getImageActionsKeyboard(imageData.id, user.id, availableServices);
