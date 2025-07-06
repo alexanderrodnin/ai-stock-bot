@@ -114,3 +114,14 @@ out/
 
 # Test files with sensitive data
 test-upload-debug.js
+test-direct-upload.js
+test-real-generation.js
+test-ftp-verification.js
+test-ftp-cleanup.js
+test-upload-no-metadata.js
+test-ftp-binary-mode.js
+test-node-ftp.js
+test-updated-upload.js
+test-simple-upload.js
+test-full-workflow.js
+test-bot-workflow.js

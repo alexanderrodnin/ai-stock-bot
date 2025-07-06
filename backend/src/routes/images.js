@@ -102,7 +102,7 @@ const validateUploadSettings = [
  * @access  Public
  */
 router.post('/generate', 
-  imageGenerationLimiter,
+  // imageGenerationLimiter, // Temporarily disabled for testing
   validateImageGeneration,
   asyncHandler(imageController.generateImage)
 );

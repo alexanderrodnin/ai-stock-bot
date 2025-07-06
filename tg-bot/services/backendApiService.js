@@ -14,7 +14,7 @@ class BackendApiService {
    */
   constructor(options = {}) {
     this.baseURL = options.baseURL || process.env.BACKEND_API_URL || 'http://localhost:3000/api';
-    this.timeout = options.timeout || parseInt(process.env.BACKEND_API_TIMEOUT) || 30000;
+    this.timeout = options.timeout || parseInt(process.env.BACKEND_API_TIMEOUT) || 120000; // 2 minutes default
     
     // Create axios instance
     this.client = axios.create({
@@ -189,6 +189,7 @@ class BackendApiService {
    * @param {string} imageData.userExternalId User external ID
    * @param {string} imageData.prompt Image prompt
    * @param {Object} imageData.options Generation options
+   * @param {boolean} imageData.demoMode Force demo mode (use mock images)
    * @returns {Promise<Object>} Generated image data
    */
   async generateImage(imageData) {

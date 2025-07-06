@@ -63,7 +63,7 @@ const imageSchema = new mongoose.Schema({
     // Reason for fallback (if applicable)
     fallbackReason: {
       type: String,
-      enum: ['Quota Exceeded', 'Content Policy Restriction', 'API Error'],
+      enum: ['Quota Exceeded', 'Content Policy Restriction', 'API Error', 'Demo Mode Activated'],
       sparse: true
     },
 

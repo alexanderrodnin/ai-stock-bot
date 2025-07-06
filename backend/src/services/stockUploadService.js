@@ -3,7 +3,7 @@
  * Handles uploads to various stock photo services (123RF, Shutterstock, Adobe Stock)
  */
 
-const ftp = require('basic-ftp');
+const FTP = require('ftp');
 const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
@@ -142,111 +142,137 @@ class StockUploadService {
    * @returns {Promise<Object>} Upload result
    */
   async uploadTo123RF(image, serviceConfig, settings) {
-    const client = new ftp.Client();
-    
-    try {
+    return new Promise((resolve, reject) => {
+      const client = new FTP();
+      
       logger.info('Starting 123RF upload', {
         imageId: image.id,
         filename: image.file.filename,
-        filePath: image.file.path
+        filePath: image.file.path,
+        fileSize: image.file.size,
+        dimensions: `${image.file.width}x${image.file.height}`
       });
 
-      // Check if file exists
-      try {
-        await fs.access(image.file.path);
-      } catch (fileError) {
-        throw new Error(`Image file not found at path: ${image.file.path}`);
-      }
+      // Check if file exists and get its stats
+      fs.access(image.file.path)
+        .then(() => fs.stat(image.file.path))
+        .then((fileStats) => {
+          logger.info('File verification successful', {
+            imageId: image.id,
+            filePath: image.file.path,
+            actualFileSize: fileStats.size,
+            expectedFileSize: image.file.size,
+            lastModified: fileStats.mtime
+          });
+          
+          // Verify file size matches what's in database
+          if (Math.abs(fileStats.size - image.file.size) > 1000) { // Allow 1KB difference
+            logger.warn('File size mismatch detected', {
+              imageId: image.id,
+              expectedSize: image.file.size,
+              actualSize: fileStats.size,
+              difference: Math.abs(fileStats.size - image.file.size)
+            });
+          }
+        })
+        .catch((fileError) => {
+          logger.error('File access failed', {
+            imageId: image.id,
+            filePath: image.file.path,
+            error: fileError.message
+          });
+          reject(new Error(`Image file not found at path: ${image.file.path}`));
+          return;
+        });
+
+      client.on('ready', () => {
+        logger.info('FTP connection established', {
+          host: serviceConfig.credentials.ftpHost,
+          user: serviceConfig.credentials.username
+        });
+
+        // Change to remote directory
+        const remotePath = serviceConfig.credentials.remotePath || '/ai_image';
+        client.cwd(remotePath, (cwdErr) => {
+          if (cwdErr) {
+            logger.error('Failed to change directory', {
+              remotePath,
+              error: cwdErr.message
+            });
+            client.end();
+            reject(new Error(`Failed to change to directory ${remotePath}: ${cwdErr.message}`));
+            return;
+          }
+
+          logger.info('Changed to remote directory', { remotePath });
+
+          // Set binary mode explicitly
+          client.binary((binaryErr) => {
+            if (binaryErr) {
+              logger.error('Failed to set binary mode', { error: binaryErr.message });
+              client.end();
+              reject(new Error(`Failed to set binary mode: ${binaryErr.message}`));
+              return;
+            }
+
+            logger.info('Set binary transfer mode');
+
+            // Generate remote filename
+            const timestamp = Date.now();
+            const extension = path.extname(image.file.filename);
+            // Clean title for filename - remove spaces and special characters
+            const cleanTitle = this.sanitizeFilename(settings.title || 'ai_image');
+            const remoteFileName = `${cleanTitle}_${timestamp}${extension}`;
+
+            logger.info('Uploading file', {
+              localPath: image.file.path,
+              remoteFileName
+            });
+
+            // Upload ONLY the image file (NO metadata .txt file)
+            client.put(image.file.path, remoteFileName, (putErr) => {
+              if (putErr) {
+                logger.error('123RF FTP upload failed', {
+                  imageId: image.id,
+                  error: putErr.message
+                });
+                client.end();
+                reject(new Error(`123RF upload failed: ${putErr.message}`));
+                return;
+              }
+
+              logger.info('File uploaded successfully', {
+                remoteFileName,
+                note: 'No metadata file created - image only upload'
+              });
+
+              const result = {
+                externalId: remoteFileName,
+                uploadUrl: `ftp://${serviceConfig.credentials.ftpHost}${remotePath}/${remoteFileName}`,
+                remoteFilePath: `${remotePath}/${remoteFileName}`,
+                remoteFileName
+              };
+
+              client.end();
+              resolve(result);
+            });
+          });
+        });
+      });
+
+      client.on('error', (err) => {
+        logger.error('FTP connection error', { error: err.message });
+        reject(new Error(`FTP connection failed: ${err.message}`));
+      });
 
       // Connect to FTP server
-      await client.access({
+      client.connect({
         host: serviceConfig.credentials.ftpHost,
         port: serviceConfig.credentials.ftpPort,
         user: serviceConfig.credentials.username,
-        password: serviceConfig.credentials.password,
-        secure: false
+        password: serviceConfig.credentials.password
       });
-
-      logger.info('FTP connection established', {
-        host: serviceConfig.credentials.ftpHost,
-        user: serviceConfig.credentials.username
-      });
-
-      // Ensure remote directory exists
-      const remotePath = serviceConfig.credentials.remotePath || '/uploads';
-      try {
-        await client.ensureDir(remotePath);
-        logger.info('Remote directory ensured', { remotePath });
-      } catch (dirError) {
-        logger.warn('Could not ensure remote directory', {
-          remotePath,
-          error: dirError.message
-        });
-      }
-
-      // Generate remote filename
-      const timestamp = Date.now();
-      const extension = path.extname(image.file.filename);
-      // Clean title for filename - remove spaces and special characters
-      const cleanTitle = this.sanitizeFilename(settings.title || 'ai_image');
-      const remoteFileName = `${cleanTitle}_${timestamp}${extension}`;
-      const remoteFilePath = path.posix.join(remotePath, remoteFileName);
-
-      logger.info('Uploading file', {
-        localPath: image.file.path,
-        remotePath: remoteFilePath,
-        remoteFileName
-      });
-
-      // Upload file
-      await client.uploadFrom(image.file.path, remoteFilePath);
-
-      logger.info('File uploaded successfully', {
-        remoteFilePath,
-        remoteFileName
-      });
-
-      // Create metadata file if required
-      if (settings.title || settings.description || settings.keywords) {
-        const metadataContent = this.generate123RFMetadata(settings);
-        const metadataFileName = `${remoteFileName}.txt`;
-        const metadataPath = path.posix.join(remotePath, metadataFileName);
-        
-        // Create temporary metadata file
-        const tempMetadataPath = path.join(config.storage.tempDir, `metadata_${timestamp}.txt`);
-        await fs.writeFile(tempMetadataPath, metadataContent);
-        
-        try {
-          await client.uploadFrom(tempMetadataPath, metadataPath);
-          // Clean up temp file
-          await fs.unlink(tempMetadataPath);
-        } catch (metaError) {
-          logger.warn('Failed to upload metadata file', { error: metaError.message });
-          // Clean up temp file even if upload failed
-          try {
-            await fs.unlink(tempMetadataPath);
-          } catch (unlinkError) {
-            // Ignore cleanup errors
-          }
-        }
-      }
-
-      return {
-        externalId: remoteFileName,
-        uploadUrl: `ftp://${serviceConfig.credentials.ftpHost}${remoteFilePath}`,
-        remoteFilePath,
-        remoteFileName
-      };
-
-    } catch (error) {
-      logger.error('123RF FTP upload failed', {
-        imageId: image.id,
-        error: error.message
-      });
-      throw new Error(`123RF upload failed: ${error.message}`);
-    } finally {
-      client.close();
-    }
+    });
   }
 
   /**
@@ -412,33 +438,49 @@ class StockUploadService {
    * @returns {Promise<Object>} Test result
    */
   async test123RFConnection(serviceConfig) {
-    const client = new ftp.Client();
-    
-    try {
-      await client.access({
+    return new Promise((resolve, reject) => {
+      const client = new FTP();
+      
+      client.on('ready', () => {
+        // Try to list directory
+        const remotePath = serviceConfig.credentials.remotePath || '/ai_image';
+        client.cwd(remotePath, (cwdErr) => {
+          if (cwdErr) {
+            client.end();
+            reject(new Error(`Failed to access directory ${remotePath}: ${cwdErr.message}`));
+            return;
+          }
+
+          client.list((listErr, files) => {
+            client.end();
+            
+            if (listErr) {
+              reject(new Error(`Failed to list directory: ${listErr.message}`));
+              return;
+            }
+
+            resolve({
+              connected: true,
+              host: serviceConfig.credentials.ftpHost,
+              remotePath,
+              fileCount: files.length
+            });
+          });
+        });
+      });
+
+      client.on('error', (err) => {
+        reject(new Error(`123RF FTP connection failed: ${err.message}`));
+      });
+
+      // Connect to FTP server
+      client.connect({
         host: serviceConfig.credentials.ftpHost,
         port: serviceConfig.credentials.ftpPort,
         user: serviceConfig.credentials.username,
-        password: serviceConfig.credentials.password,
-        secure: false
+        password: serviceConfig.credentials.password
       });
-
-      // Try to list directory
-      const remotePath = serviceConfig.credentials.remotePath || '/';
-      const files = await client.list(remotePath);
-
-      return {
-        connected: true,
-        host: serviceConfig.credentials.ftpHost,
-        remotePath,
-        fileCount: files.length
-      };
-
-    } catch (error) {
-      throw new Error(`123RF FTP connection failed: ${error.message}`);
-    } finally {
-      client.close();
-    }
+    });
   }
 
   /**

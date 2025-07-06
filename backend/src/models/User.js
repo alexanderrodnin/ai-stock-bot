@@ -272,11 +272,11 @@ const userSchema = new mongoose.Schema({
     limits: {
       imagesPerDay: {
         type: Number,
-        default: 10
+        default: 1000 // Increased for testing
       },
       imagesPerMonth: {
         type: Number,
-        default: 100
+        default: 10000 // Increased for testing
       }
     },
     usage: {

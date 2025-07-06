@@ -42,7 +42,8 @@ class ImageController {
       model, 
       size, 
       quality, 
-      style 
+      style,
+      demoMode = false
     } = req.body;
 
     logger.info('Image generation request', {
@@ -87,6 +88,7 @@ class ImageController {
         userId,
         userExternalId,
         userExternalSystem,
+        demoMode,
         options: {
           model,
           size,

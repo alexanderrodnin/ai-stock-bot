@@ -2,14 +2,18 @@ require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
 const fs = require('fs');
 const path = require('path');
-const { cleanupTempFiles } = require('./download-image');
+const { cleanupTempFiles, downloadImage } = require('./download-image');
 const BackendApiService = require('./services/backendApiService');
+const mockImageUrls = require('./mock-image-urls');
 
 // Check if running in demo mode
-const DEMO_MODE = process.env.DEMO_MODE === 'true';
+let DEMO_MODE = process.env.DEMO_MODE === 'true';
+let demoModeActivatedByError = false;
 
 if (DEMO_MODE) {
-  console.log('Running in DEMO MODE - using backend API with fallback support');
+  console.log('Running in DEMO MODE - using mock images instead of OpenAI API');
+} else {
+  console.log('Running in NORMAL MODE - using backend API with OpenAI integration');
 }
 
 // Clean up temporary files every 24 hours
@@ -31,7 +35,7 @@ const bot = new TelegramBot(process.env.TELEGRAM_TOKEN, { polling: true });
 // Initialize the backend API service
 const backendApi = new BackendApiService({
   baseURL: process.env.BACKEND_API_URL || 'http://localhost:3000/api',
-  timeout: parseInt(process.env.BACKEND_API_TIMEOUT) || 30000
+  timeout: parseInt(process.env.BACKEND_API_TIMEOUT) || 120000 // 2 minutes
 });
 
 // Constants
@@ -169,6 +173,39 @@ async function saveImageLocally(imageBuffer, imageId) {
   
   fs.writeFileSync(filePath, imageBuffer);
   return filePath;
+}
+
+/**
+ * Generate mock image in DEMO mode
+ */
+async function generateMockImage(prompt) {
+  console.log('DEMO MODE: Generating mock image for prompt:', prompt);
+  
+  // Get appropriate mock image URL based on prompt
+  const mockUrl = mockImageUrls.getMockImageUrl(prompt);
+  console.log(`DEMO MODE: Using mock image from ${mockUrl}`);
+  
+  // Download the mock image to a local file
+  const localImagePath = await downloadImage(mockUrl);
+  console.log(`DEMO MODE: Mock image downloaded to ${localImagePath}`);
+  
+  return {
+    localPath: localImagePath,
+    source: 'Demo Mode',
+    model: null,
+    size: '1024x1024'
+  };
+}
+
+/**
+ * Activate demo mode due to API error
+ */
+function activateDemoMode(reason = 'API Error') {
+  if (!demoModeActivatedByError) {
+    console.log(`🔄 ACTIVATING DEMO MODE: ${reason}`);
+    demoModeActivatedByError = true;
+    DEMO_MODE = true;
+  }
 }
 
 // Start command handler
@@ -362,83 +399,89 @@ bot.on('message', async (msg) => {
     // Only start processing if user has active stocks
     const processingMessage = await bot.sendMessage(chatId, '🎨 Генерирую изображение, пожалуйста подождите...');
 
-    console.log('Generating image for prompt:', prompt);
-    
-    // Generate the image using backend API
-    const imageData = await backendApi.generateImage({
-      userId: user.id,
-      userExternalId: user.externalId,
-      prompt: prompt,
-      options: {
-        model: 'dall-e-3',
-        size: '1024x1024',
-        quality: 'standard',
-        style: 'vivid'
-      }
-    });
+    try {
+      console.log('Generating image for prompt:', prompt);
+      
+      // Generate the image using backend API
+      const imageData = await backendApi.generateImage({
+        userId: user.id,
+        userExternalId: user.externalId,
+        prompt: prompt,
+        demoMode: DEMO_MODE,
+        options: {
+          model: 'dall-e-3',
+          size: '1024x1024',
+          quality: 'standard',
+          style: 'vivid'
+        }
+      });
 
-    // Download image from backend
-    const imageBuffer = await backendApi.downloadImage(imageData.id, user.id, 'file');
-    
-    // Save image locally for Telegram
-    const localImagePath = await saveImageLocally(imageBuffer, imageData.id);
-    
-    // Get available stock services for this user
-    const availableServices = await getAvailableStockServices(user.id);
-    
-    // Create caption
-    let caption = `🎨 Изображение сгенерировано!\n\n`;
-    caption += `📝 **Промт:** ${prompt}\n`;
-    caption += `🤖 **Модель:** ${imageData.model}\n`;
-    caption += `📐 **Размер:** ${imageData.size}`;
-    
-    // Create inline keyboard with upload options
-    const keyboard = getImageActionsKeyboard(imageData.id, user.id, availableServices);
-    
-    // Store the image data in cache for callback operations
-    userImageCache.set(msg.from.id, {
-      imageId: imageData.id,
-      localPath: localImagePath,
-      prompt: prompt
-    });
-    
-    console.log(`Stored image data in cache for user ${msg.from.id}: ${imageData.id}`);
-    
-    // Send the image
-    await bot.sendPhoto(chatId, fs.createReadStream(localImagePath), {
-      caption: caption,
-      parse_mode: 'Markdown',
-      reply_markup: keyboard
-    });
+      // Download image from backend
+      const imageBuffer = await backendApi.downloadImage(imageData.id, user.id, 'file');
+      
+      // Save image locally for Telegram
+      const localImagePath = await saveImageLocally(imageBuffer, imageData.id);
+      
+      // Get available stock services for this user
+      const availableServices = await getAvailableStockServices(user.id);
+      
+      // Create caption
+      let caption = `🎨 Изображение сгенерировано!\n\n`;
+      caption += `📝 **Промт:** ${prompt}\n`;
+      caption += `🤖 **Модель:** ${imageData.model}\n`;
+      caption += `📐 **Размер:** ${imageData.size}`;
+      
+      // Create inline keyboard with upload options
+      const keyboard = getImageActionsKeyboard(imageData.id, user.id, availableServices);
+      
+      // Store the image data in cache for callback operations
+      userImageCache.set(msg.from.id, {
+        imageId: imageData.id,
+        localPath: localImagePath,
+        prompt: prompt
+      });
+      
+      console.log(`Stored image data in cache for user ${msg.from.id}: ${imageData.id}`);
+      
+      // Send the image
+      await bot.sendPhoto(chatId, fs.createReadStream(localImagePath), {
+        caption: caption,
+        parse_mode: 'Markdown',
+        reply_markup: keyboard
+      });
 
-    // Delete the processing message
-    await bot.deleteMessage(chatId, processingMessage.message_id);
-    
-  } catch (error) {
-    console.error('Error generating image:', error.message);
-    
-    let errorMessage = '❌ Не удалось сгенерировать изображение. ';
-    
-    if (error.message.includes('NO_ACTIVE_STOCK_SERVICES')) {
-      // This should not happen due to frontend check, but handle it anyway
+      // Delete the processing message
       await bot.deleteMessage(chatId, processingMessage.message_id);
-      await bot.sendMessage(chatId, 
-        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
-        { parse_mode: 'Markdown' }
-      );
-      return showStockSetupMenu(chatId, user.id);
-    } else if (error.message.includes('Backend health check failed')) {
-      errorMessage += 'Сервис временно недоступен.';
-    } else if (error.message.includes('Failed to generate image')) {
-      errorMessage += 'Ошибка генерации. Попробуйте изменить описание.';
-    } else {
-      errorMessage += 'Попробуйте позже.';
+      
+    } catch (error) {
+      console.error('Error generating image:', error.message);
+      
+      let errorMessage = '❌ Не удалось сгенерировать изображение. ';
+      
+      if (error.message.includes('NO_ACTIVE_STOCK_SERVICES')) {
+        // This should not happen due to frontend check, but handle it anyway
+        await bot.deleteMessage(chatId, processingMessage.message_id);
+        await bot.sendMessage(chatId, 
+          '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
+          { parse_mode: 'Markdown' }
+        );
+        return showStockSetupMenu(chatId, user.id);
+      } else if (error.message.includes('Backend health check failed')) {
+        errorMessage += 'Сервис временно недоступен.';
+      } else if (error.message.includes('Failed to generate image')) {
+        errorMessage += 'Ошибка генерации. Попробуйте изменить описание.';
+      } else {
+        errorMessage += 'Попробуйте позже.';
+      }
+      
+      await bot.editMessageText(errorMessage, {
+        chat_id: chatId,
+        message_id: processingMessage.message_id
+      });
     }
-    
-    await bot.editMessageText(errorMessage, {
-      chat_id: chatId,
-      message_id: processingMessage.message_id
-    });
+  } catch (error) {
+    console.error('Error in main message handler:', error.message);
+    await bot.sendMessage(chatId, '❌ Произошла ошибка. Попробуйте позже.');
   }
 });
 
@@ -448,6 +491,21 @@ bot.on('callback_query', async (callbackQuery) => {
   const messageId = callbackQuery.message.message_id;
   const userId = callbackQuery.from.id;
   const data = callbackQuery.data;
+  
+  // Try to acknowledge the callback query immediately to prevent timeout
+  try {
+    await bot.answerCallbackQuery(callbackQuery.id);
+  } catch (ackError) {
+    // If acknowledgment fails (e.g., query too old), log it but continue processing
+    console.error('Failed to acknowledge callback query:', ackError.message);
+    
+    // If the query is too old, send a new message instead of trying to process it
+    if (ackError.message.includes('query is too old')) {
+      return bot.sendMessage(chatId, 
+        '⚠️ Кнопка устарела. Пожалуйста, сгенерируйте новое изображение или используйте команды /start или /mystocks.'
+      );
+    }
+  }
   
   try {
     // Initialize user
@@ -480,21 +538,16 @@ bot.on('callback_query', async (callbackQuery) => {
       await handleImageUpload(callbackQuery, user);
     }
     
-    // Acknowledge the button press
-    await bot.answerCallbackQuery(callbackQuery.id);
-    
   } catch (error) {
     console.error('Error handling callback query:', error.message);
     
-    // Try to acknowledge the callback query even if there was an error
+    // Send error message to user
     try {
-      await bot.answerCallbackQuery(callbackQuery.id, {
-        text: 'Произошла ошибка. Попробуйте позже.',
-        show_alert: true
-      });
-    } catch (ackError) {
-      // If acknowledgment fails (e.g., query too old), just log it
-      console.error('Failed to acknowledge callback query:', ackError.message);
+      await bot.sendMessage(chatId, 
+        '❌ Произошла ошибка при обработке запроса. Попробуйте позже или используйте команды /start или /mystocks.'
+      );
+    } catch (sendError) {
+      console.error('Failed to send error message:', sendError.message);
     }
   }
 });

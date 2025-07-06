@@ -56,6 +56,7 @@ class ImageService {
       userId,
       userExternalId,
       userExternalSystem = 'api',
+      demoMode = false,
       options = {}
     } = params;
 
@@ -101,41 +102,59 @@ class ImageService {
       let usedSource = 'OpenAI';
       let fallbackReason = null;
 
-      try {
-        // Try OpenAI first
-        const response = await this.openai.images.generate(generationParams);
-
-        if (!response.data || response.data.length === 0) {
-          throw new Error('No image data received from OpenAI');
-        }
-
-        imageData = response.data[0];
-        
-      } catch (openaiError) {
-        // Handle OpenAI API errors with fallback
-        logger.warn('OpenAI API failed, using fallback', {
+      // Check if demo mode is forced
+      if (demoMode) {
+        logger.info('Demo mode activated - using mock image', {
           userId,
           userExternalId,
-          error: openaiError.message,
-          errorType: openaiError.error?.type
+          prompt: prompt.substring(0, 50)
         });
 
-        // Determine fallback reason
-        if (openaiError.status === 429 || openaiError.message?.includes('quota')) {
-          fallbackReason = 'Quota Exceeded';
-        } else if (openaiError.error?.type === 'image_generation_user_error') {
-          fallbackReason = 'Content Policy Restriction';
-        } else {
-          fallbackReason = 'API Error';
-        }
-
-        // Use mock image as fallback
+        // Use mock image directly in demo mode
         const mockImageUrl = getMockImageUrl(prompt);
         imageData = {
           url: mockImageUrl,
-          revised_prompt: `Fallback image for: ${prompt}`
+          revised_prompt: `Demo mode image for: ${prompt}`
         };
-        usedSource = `Fallback (${fallbackReason})`;
+        usedSource = 'Demo Mode';
+        fallbackReason = 'Demo Mode Activated';
+      } else {
+        try {
+          // Try OpenAI first
+          const response = await this.openai.images.generate(generationParams);
+
+          if (!response.data || response.data.length === 0) {
+            throw new Error('No image data received from OpenAI');
+          }
+
+          imageData = response.data[0];
+          
+        } catch (openaiError) {
+          // Handle OpenAI API errors with fallback
+          logger.warn('OpenAI API failed, using fallback', {
+            userId,
+            userExternalId,
+            error: openaiError.message,
+            errorType: openaiError.error?.type
+          });
+
+          // Determine fallback reason
+          if (openaiError.status === 429 || openaiError.message?.includes('quota')) {
+            fallbackReason = 'Quota Exceeded';
+          } else if (openaiError.error?.type === 'image_generation_user_error') {
+            fallbackReason = 'Content Policy Restriction';
+          } else {
+            fallbackReason = 'API Error';
+          }
+
+          // Use mock image as fallback
+          const mockImageUrl = getMockImageUrl(prompt);
+          imageData = {
+            url: mockImageUrl,
+            revised_prompt: `Fallback image for: ${prompt}`
+          };
+          usedSource = `Fallback (${fallbackReason})`;
+        }
       }
       
       // Download and save the image
@@ -176,6 +195,19 @@ class ImageService {
       });
 
       await imageRecord.save();
+
+      // Log detailed file information for debugging
+      logger.info('Image record saved with file details', {
+        imageId: imageRecord.id,
+        userId,
+        filePath: fileInfo.path,
+        fileName: fileInfo.filename,
+        fileSize: fileInfo.size,
+        dimensions: `${fileInfo.width}x${fileInfo.height}`,
+        processing: fileInfo.processing,
+        usedSource,
+        fallbackReason
+      });
 
       // Update user statistics
       await user.updateStats('imagesGenerated');
@@ -254,20 +286,29 @@ class ImageService {
       const finalFilePath = path.join(this.tempDir, finalFilename);
 
       // Process image with sharp to ensure valid dimensions for 123RF
-      // For 123RF, we need at least 4000x4000 pixels (6 megapixels)
+      // For 123RF, we need at least 4000x4000 pixels (6 megapixels) with 300 DPI
       const processedImage = await sharp(tempFilePath)
         .resize({
           width: 4000,
           height: 4000,
-          fit: 'inside',
+          fit: 'cover', // Use cover to maintain aspect ratio and fill the frame
+          position: 'center',
           withoutEnlargement: false // Allow enlargement for smaller images
         })
         .jpeg({
-          quality: 72,
+          quality: 85, // Higher quality for stock photography
           progressive: false, // Baseline JPEG for better compatibility
-          mozjpeg: true // Better compression
+          mozjpeg: true, // Better compression
+          chromaSubsampling: '4:4:4' // Better color sampling for stock photos
         })
-        .withMetadata() // Save metadata
+        .withMetadata()
+        .withExif({
+          IFD0: {
+            XResolution: '300/1',
+            YResolution: '300/1',
+            ResolutionUnit: '2' // inches
+          }
+        })
         .toColorspace('srgb') // Force sRGB colorspace
         .toFile(finalFilePath);
 
