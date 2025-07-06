@@ -534,6 +534,18 @@ bot.on('callback_query', async (callbackQuery) => {
       await handleConfirmDelete(callbackQuery, user);
     } else if (data === 'cancel_delete') {
       await bot.sendMessage(chatId, '❌ Удаление отменено.');
+    } else if (data.startsWith('confirm_save_')) {
+      await handleConfirmSave(callbackQuery, user);
+    } else if (data.startsWith('confirm_cancel_')) {
+      await handleConfirmCancel(callbackQuery, user);
+    } else if (data.startsWith('confirm_edit_')) {
+      await handleConfirmEdit(callbackQuery, user);
+    } else if (data.startsWith('skip_username_')) {
+      await handleSkipUsername(callbackQuery, user);
+    } else if (data.startsWith('skip_password_')) {
+      await handleSkipPassword(callbackQuery, user);
+    } else if (data.startsWith('cancel_setup_')) {
+      await handleCancelSetup(callbackQuery, user);
     } else if (data.startsWith('upload_')) {
       await handleImageUpload(callbackQuery, user);
     }
@@ -604,9 +616,17 @@ async function handleSetupStep(msg, session) {
           session.data.username = input;
           session.step = 'password';
           
-          await bot.sendMessage(chatId, 
-            `✅ Логин сохранен: ${input}\n\n🔐 Теперь введите пароль для ${serviceName}:`
-          );
+          const message = `✅ Логин сохранен: ${input}\n\n🔐 Теперь введите пароль для ${serviceName}:`;
+          
+          const keyboard = {
+            inline_keyboard: [
+              [{ text: "❌ Отмена", callback_data: `cancel_setup_${telegramUserId}` }]
+            ]
+          };
+          
+          await bot.sendMessage(chatId, message, {
+            reply_markup: keyboard
+          });
         }
         break;
         
@@ -638,7 +658,7 @@ async function handleSetupStep(msg, session) {
           session.data.ftpPort = 21;
           session.data.remotePath = '/ai_images';
           
-          // Show confirmation for 123RF with default settings
+          // Show confirmation for 123RF with inline buttons
           const passwordLength = (session.data.password || '').length;
           const rf123ConfirmMessage = `📋 Проверьте настройки ${serviceName}:
 
@@ -648,9 +668,23 @@ async function handleSetupStep(msg, session) {
 🔌 FTP порт: ${session.data.ftpPort} (автоматически)
 📁 Путь: ${session.data.remotePath} (автоматически)
 
-Все верно? Отправьте "да" для сохранения или "нет" для отмены.`;
+Все верно?`;
+
+          const confirmKeyboard = {
+            inline_keyboard: [
+              [
+                { text: "✅ Сохранить", callback_data: `confirm_save_${telegramUserId}` },
+                { text: "❌ Отмена", callback_data: `confirm_cancel_${telegramUserId}` }
+              ],
+              [
+                { text: "✏️ Изменить", callback_data: `confirm_edit_${telegramUserId}` }
+              ]
+            ]
+          };
           
-          await bot.sendMessage(chatId, rf123ConfirmMessage);
+          await bot.sendMessage(chatId, rf123ConfirmMessage, {
+            reply_markup: confirmKeyboard
+          });
         } else if (session.service === 'shutterstock') {
           session.step = 'api_key';
           await bot.sendMessage(chatId, 
@@ -715,6 +749,8 @@ async function handleSetupStep(msg, session) {
         break;
         
       case 'confirm':
+        // This case should not be reached anymore as we use inline buttons
+        // But keep it for backward compatibility
         const confirmation = input.toLowerCase();
         
         if (confirmation === 'да' || confirmation === 'yes' || confirmation === 'y') {
@@ -891,11 +927,19 @@ async function handleStockSetup(chatId, telegramUserId, userId, service) {
   const message = `🔧 *Настройка ${serviceName}*
 
 Для настройки ${serviceName} потребуются учетные данные.
-Отправьте "отмена" в любой момент для прерывания.
 
 👤 Введите ваш логин для ${serviceName}:`;
+
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "❌ Отмена", callback_data: `cancel_setup_${telegramUserId}` }]
+    ]
+  };
   
-  await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+  await bot.sendMessage(chatId, message, { 
+    parse_mode: 'Markdown',
+    reply_markup: keyboard
+  });
 }
 
 /**
@@ -1040,9 +1084,6 @@ async function handleViewStock(callbackQuery, user) {
       message += `🔐 **API секрет:** ${serviceData.credentials.secret.substring(0, 8)}...\n`;
     }
     
-    message += `\n⚙️ **Настройки:**\n`;
-    message += `• Автозагрузка: ${serviceData.settings.autoUpload ? '✅' : '❌'}\n`;
-    message += `• Ценовая категория: ${serviceData.settings.pricing}\n`;
     
     await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
     
@@ -1134,9 +1175,19 @@ async function handleEditStock(callbackQuery, user) {
       }
     });
     
-    const message = `✏️ *Редактирование ${serviceName}*\n\nТекущий логин: ${serviceData.credentials.username}\n\nВведите новый логин или отправьте "пропустить" чтобы оставить текущий:`;
+    const message = `✏️ *Редактирование ${serviceName}*\n\nТекущий логин: ${serviceData.credentials.username}\n\nВведите новый логин или нажмите "Пропустить" чтобы оставить текущий:`;
     
-    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "⏭️ Пропустить", callback_data: `skip_username_${telegramUserId}` }],
+        [{ text: "❌ Отмена", callback_data: `cancel_setup_${telegramUserId}` }]
+      ]
+    };
+    
+    await bot.sendMessage(chatId, message, { 
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
     
   } catch (error) {
     console.error('Error handling edit stock:', error.message);
@@ -1184,6 +1235,286 @@ async function handleConfirmDelete(callbackQuery, user) {
   } catch (error) {
     console.error('Error deleting stock service:', error.message);
     await bot.sendMessage(chatId, `❌ Ошибка удаления ${serviceName}: ${error.message}`);
+  }
+}
+
+/**
+ * Handle confirm save button
+ */
+async function handleConfirmSave(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const telegramUserId = callbackQuery.from.id;
+  
+  // Get session data
+  const session = userSessions.get(telegramUserId);
+  if (!session) {
+    return bot.sendMessage(chatId, '❌ Сессия истекла. Начните настройку заново.');
+  }
+  
+  // Save settings to backend
+  await saveStockServiceSettings(chatId, telegramUserId, user.id, session);
+}
+
+/**
+ * Handle confirm cancel button
+ */
+async function handleConfirmCancel(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const telegramUserId = callbackQuery.from.id;
+  
+  // Clear session
+  userSessions.delete(telegramUserId);
+  
+  // Return to /mystocks menu instead of just showing cancellation message
+  try {
+    const stockServices = await backendApi.getStockServices(user.id);
+    
+    let message = `📊 *Управление стоковыми сервисами*\n\n`;
+    
+    const keyboard = {
+      inline_keyboard: []
+    };
+    
+    // 123RF
+    const rf123Status = stockServices.rf123?.enabled ? '✅ Активен' : '❌ Не настроен';
+    message += `🔸 **123RF**: ${rf123Status}\n\n`;
+    
+    if (stockServices.rf123?.enabled) {
+      // Если сервис привязан - показываем кнопки управления
+      message += `Сервис 123RF настроен и готов к работе.`;
+      keyboard.inline_keyboard.push([
+        { text: "👁️ Посмотреть 123RF", callback_data: "view_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "✏️ Изменить данные 123RF", callback_data: "edit_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "🗑️ Удалить 123RF", callback_data: "delete_rf123" }
+      ]);
+    } else {
+      // Если сервис не привязан - показываем только кнопку привязки
+      message += `⚠️ *Сервис не настроен*\nДля генерации изображений необходимо привязать стоковый сервис 123RF.`;
+      keyboard.inline_keyboard.push([
+        { text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }
+      ]);
+    }
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error in handleConfirmCancel:', error.message);
+    await bot.sendMessage(chatId, '❌ Настройка отменена.');
+  }
+}
+
+/**
+ * Handle confirm edit button
+ */
+async function handleConfirmEdit(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const telegramUserId = callbackQuery.from.id;
+  
+  // Get session data
+  const session = userSessions.get(telegramUserId);
+  if (!session) {
+    return bot.sendMessage(chatId, '❌ Сессия истекла. Начните настройку заново.');
+  }
+  
+  // Reset to username step for editing
+  session.step = 'username';
+  session.action = 'edit_stock'; // Set action to edit mode
+  
+  const serviceNames = {
+    '123rf': '123RF',
+    'shutterstock': 'Shutterstock',
+    'adobeStock': 'Adobe Stock'
+  };
+  
+  const serviceName = serviceNames[session.service];
+  
+  // Get current data for editing context
+  try {
+    const stockServices = await backendApi.getStockServices(user.id);
+    const serviceData = stockServices[session.service === '123rf' ? 'rf123' : session.service];
+    
+    if (serviceData && serviceData.credentials) {
+      session.data.currentData = serviceData.credentials;
+    }
+    
+    const message = `✏️ *Редактирование ${serviceName}*\n\nТекущий логин: ${serviceData?.credentials?.username || 'не указан'}\n\nВведите новый логин или нажмите "Пропустить" чтобы оставить текущий:`;
+    
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "⏭️ Пропустить", callback_data: `skip_username_${telegramUserId}` }],
+        [{ text: "❌ Отмена", callback_data: `cancel_setup_${telegramUserId}` }]
+      ]
+    };
+    
+    await bot.sendMessage(chatId, message, { 
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error in handleConfirmEdit:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка при загрузке данных для редактирования.');
+  }
+}
+
+/**
+ * Handle skip username button
+ */
+async function handleSkipUsername(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const telegramUserId = callbackQuery.from.id;
+  
+  // Get session data
+  const session = userSessions.get(telegramUserId);
+  if (!session) {
+    return bot.sendMessage(chatId, '❌ Сессия истекла. Начните настройку заново.');
+  }
+  
+  // Keep current username
+  session.data.username = session.data.currentData?.username || '';
+  session.step = 'password';
+  
+  const serviceNames = {
+    '123rf': '123RF',
+    'shutterstock': 'Shutterstock',
+    'adobeStock': 'Adobe Stock'
+  };
+  
+  const serviceName = serviceNames[session.service];
+  
+  const message = `✅ Логин: ${session.data.username}\n\n🔐 Введите новый пароль для ${serviceName} или нажмите "Пропустить" чтобы оставить текущий:`;
+  
+  const keyboard = {
+    inline_keyboard: [
+      [{ text: "⏭️ Пропустить", callback_data: `skip_password_${telegramUserId}` }],
+      [{ text: "❌ Отмена", callback_data: `cancel_setup_${telegramUserId}` }]
+    ]
+  };
+  
+  await bot.sendMessage(chatId, message, {
+    reply_markup: keyboard
+  });
+}
+
+/**
+ * Handle skip password button
+ */
+async function handleSkipPassword(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const telegramUserId = callbackQuery.from.id;
+  
+  // Get session data
+  const session = userSessions.get(telegramUserId);
+  if (!session) {
+    return bot.sendMessage(chatId, '❌ Сессия истекла. Начните настройку заново.');
+  }
+  
+  // Keep current password
+  session.data.password = session.data.currentData?.password || '';
+  
+  // Continue with confirmation step for 123RF
+  if (session.service === '123rf') {
+    session.step = 'confirm';
+    
+    // Set default FTP settings for 123RF
+    session.data.ftpHost = 'ftp.123rf.com';
+    session.data.ftpPort = 21;
+    session.data.remotePath = '/ai_images';
+    
+    const serviceNames = {
+      '123rf': '123RF',
+      'shutterstock': 'Shutterstock',
+      'adobeStock': 'Adobe Stock'
+    };
+    
+    const serviceName = serviceNames[session.service];
+    
+    // Show confirmation for 123RF with inline buttons
+    const passwordLength = (session.data.password || '').length;
+    const rf123ConfirmMessage = `📋 Проверьте настройки ${serviceName}:
+
+👤 Логин: ${session.data.username}
+🔐 Пароль: ${'*'.repeat(passwordLength)}
+🌐 FTP хост: ${session.data.ftpHost} (автоматически)
+🔌 FTP порт: ${session.data.ftpPort} (автоматически)
+📁 Путь: ${session.data.remotePath} (автоматически)
+
+Все верно?`;
+
+    const confirmKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "✅ Сохранить", callback_data: `confirm_save_${telegramUserId}` },
+          { text: "❌ Отмена", callback_data: `confirm_cancel_${telegramUserId}` }
+        ],
+        [
+          { text: "✏️ Изменить", callback_data: `confirm_edit_${telegramUserId}` }
+        ]
+      ]
+    };
+    
+    await bot.sendMessage(chatId, rf123ConfirmMessage, {
+      reply_markup: confirmKeyboard
+    });
+  }
+}
+
+/**
+ * Handle cancel setup button
+ */
+async function handleCancelSetup(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const telegramUserId = callbackQuery.from.id;
+  
+  // Clear session
+  userSessions.delete(telegramUserId);
+  
+  // Return to /mystocks menu instead of just showing cancellation message
+  try {
+    const stockServices = await backendApi.getStockServices(user.id);
+    
+    let message = `📊 *Управление стоковыми сервисами*\n\n`;
+    
+    const keyboard = {
+      inline_keyboard: []
+    };
+    
+    // 123RF
+    const rf123Status = stockServices.rf123?.enabled ? '✅ Активен' : '❌ Не настроен';
+    message += `🔸 **123RF**: ${rf123Status}\n\n`;
+    
+    if (stockServices.rf123?.enabled) {
+      // Если сервис привязан - показываем кнопки управления
+      message += `Сервис 123RF настроен и готов к работе.`;
+      keyboard.inline_keyboard.push([
+        { text: "👁️ Посмотреть 123RF", callback_data: "view_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "✏️ Изменить данные 123RF", callback_data: "edit_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "🗑️ Удалить 123RF", callback_data: "delete_rf123" }
+      ]);
+    } else {
+      // Если сервис не привязан - показываем только кнопку привязки
+      message += `⚠️ *Сервис не настроен*\nДля генерации изображений необходимо привязать стоковый сервис 123RF.`;
+      keyboard.inline_keyboard.push([
+        { text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }
+      ]);
+    }
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error in handleCancelSetup:', error.message);
+    await bot.sendMessage(chatId, '❌ Настройка отменена.');
   }
 }
 
