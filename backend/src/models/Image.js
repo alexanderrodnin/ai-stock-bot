@@ -63,7 +63,17 @@ const imageSchema = new mongoose.Schema({
     // Reason for fallback (if applicable)
     fallbackReason: {
       type: String,
-      enum: ['Quota Exceeded', 'Content Policy Restriction', 'API Error', 'Demo Mode Activated'],
+      enum: [
+        'Authentication Failed',
+        'API Key Invalid or Forbidden', 
+        'Quota Exceeded', 
+        'OpenAI Server Error',
+        'Content Policy Restriction', 
+        'Request Timeout',
+        'Network Error',
+        'API Error', 
+        'Demo Mode Activated'
+      ],
       sparse: true
     },
 

@@ -135,14 +135,26 @@ class ImageService {
             userId,
             userExternalId,
             error: openaiError.message,
-            errorType: openaiError.error?.type
+            status: openaiError.status,
+            errorType: openaiError.error?.type,
+            errorCode: openaiError.code
           });
 
-          // Determine fallback reason
-          if (openaiError.status === 429 || openaiError.message?.includes('quota')) {
+          // Determine fallback reason based on error type
+          if (openaiError.status === 401) {
+            fallbackReason = 'Authentication Failed';
+          } else if (openaiError.status === 403) {
+            fallbackReason = 'API Key Invalid or Forbidden';
+          } else if (openaiError.status === 429 || openaiError.message?.includes('quota')) {
             fallbackReason = 'Quota Exceeded';
+          } else if (openaiError.status === 500 || openaiError.status === 502 || openaiError.status === 503) {
+            fallbackReason = 'OpenAI Server Error';
           } else if (openaiError.error?.type === 'image_generation_user_error') {
             fallbackReason = 'Content Policy Restriction';
+          } else if (openaiError.message?.includes('timeout')) {
+            fallbackReason = 'Request Timeout';
+          } else if (openaiError.message?.includes('network')) {
+            fallbackReason = 'Network Error';
           } else {
             fallbackReason = 'API Error';
           }
@@ -154,6 +166,13 @@ class ImageService {
             revised_prompt: `Fallback image for: ${prompt}`
           };
           usedSource = `Fallback (${fallbackReason})`;
+          
+          logger.info('Using fallback image', {
+            userId,
+            userExternalId,
+            fallbackReason,
+            mockImageUrl
+          });
         }
       }
       
@@ -254,16 +273,36 @@ class ImageService {
    */
   async downloadAndSaveImage(imageUrl, metadata = {}) {
     try {
-      // Download image
-      const response = await axios({
-        method: 'GET',
-        url: imageUrl,
-        responseType: 'arraybuffer',
-        timeout: 30000,
-        maxContentLength: this.maxFileSize
-      });
+      logger.info('Downloading image', { imageUrl, metadata });
 
-      const imageBuffer = Buffer.from(response.data);
+      let imageBuffer;
+      
+      try {
+        // Download image
+        const response = await axios({
+          method: 'GET',
+          url: imageUrl,
+          responseType: 'arraybuffer',
+          timeout: 30000,
+          maxContentLength: this.maxFileSize
+        });
+
+        imageBuffer = Buffer.from(response.data);
+        logger.info('Image downloaded successfully', { 
+          imageUrl, 
+          size: imageBuffer.length 
+        });
+        
+      } catch (downloadError) {
+        logger.warn('Failed to download image, creating local fallback', {
+          imageUrl,
+          error: downloadError.message,
+          status: downloadError.response?.status
+        });
+        
+        // Create a local fallback image using sharp
+        imageBuffer = await this.createLocalFallbackImage(metadata.prompt || 'Generated Image');
+      }
       
       // Validate file size
       if (imageBuffer.length > this.maxFileSize) {
@@ -635,6 +674,78 @@ class ImageService {
       return path.basename(urlPath) || 'image.jpg';
     } catch {
       return 'image.jpg';
+    }
+  }
+
+  /**
+   * Create a local fallback image when download fails
+   * @param {string} text - Text to display on image
+   * @returns {Promise<Buffer>} Image buffer
+   */
+  async createLocalFallbackImage(text = 'Generated Image') {
+    try {
+      // Create a simple colored background with text
+      const width = 1024;
+      const height = 1024;
+      
+      // Truncate text if too long
+      const displayText = text.length > 30 ? text.substring(0, 27) + '...' : text;
+      
+      // Create a gradient background SVG
+      const svg = `
+        <svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+              <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+            </linearGradient>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grad1)" />
+          <text x="50%" y="45%" font-family="Arial, sans-serif" font-size="48" font-weight="bold" 
+                text-anchor="middle" fill="white" opacity="0.9">AI Generated</text>
+          <text x="50%" y="55%" font-family="Arial, sans-serif" font-size="32" 
+                text-anchor="middle" fill="white" opacity="0.7">${displayText}</text>
+          <text x="50%" y="85%" font-family="Arial, sans-serif" font-size="24" 
+                text-anchor="middle" fill="white" opacity="0.5">Fallback Image</text>
+        </svg>
+      `;
+
+      const imageBuffer = await sharp(Buffer.from(svg))
+        .png()
+        .toBuffer();
+
+      logger.info('Created local fallback image', { 
+        text: displayText,
+        size: imageBuffer.length 
+      });
+
+      return imageBuffer;
+      
+    } catch (error) {
+      logger.error('Failed to create local fallback image', { error: error.message });
+      
+      // Ultimate fallback - create a simple solid color image
+      try {
+        const simpleImageBuffer = await sharp({
+          create: {
+            width: 1024,
+            height: 1024,
+            channels: 3,
+            background: { r: 102, g: 126, b: 234 }
+          }
+        })
+        .png()
+        .toBuffer();
+
+        logger.info('Created simple fallback image', { 
+          size: simpleImageBuffer.length 
+        });
+
+        return simpleImageBuffer;
+      } catch (ultimateError) {
+        logger.error('Failed to create even simple fallback image', { error: ultimateError.message });
+        throw new Error('Unable to create any fallback image');
+      }
     }
   }
 }
