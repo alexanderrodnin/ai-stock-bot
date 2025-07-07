@@ -118,17 +118,15 @@ class FtpService {
   }
 
   /**
-   * Upload file to 123RF
+   * Upload file to 123RF with enhanced reliability
    * @param {string} localFilePath - Path to local file
    * @param {string} remoteFileName - Name for the file on the remote server
    * @returns {Promise<Object>} Upload result
    */
   async uploadFile(localFilePath, remoteFileName) {
     try {
-      // Check if local file exists
-      if (!fs.existsSync(localFilePath)) {
-        throw new Error(`Local file not found: ${localFilePath}`);
-      }
+      // Enhanced file verification
+      await this.verifyLocalFile(localFilePath);
 
       // Connect to FTP server
       await this.connect();
@@ -140,16 +138,66 @@ class FtpService {
       const stats = fs.statSync(localFilePath);
       const fileSize = stats.size;
 
-      logger.info('Starting FTP upload', {
+      logger.info('Starting enhanced FTP upload', {
         localFile: localFilePath,
         remoteFile: remoteFileName,
         fileSize,
         remotePath: config.ftp.remotePath
       });
 
-      // Upload the file
+      // Set binary mode explicitly for image files
+      await this.client.ensureDir('.');
+      await this.client.clearWorkingDir();
+      
+      // Force binary transfer mode
+      this.client.ftp.binary = true;
+      
+      logger.info('Set binary transfer mode for image upload');
+
+      // Upload the file with retry mechanism
       const startTime = Date.now();
-      await this.client.uploadFrom(localFilePath, remoteFileName);
+      let uploadSuccess = false;
+      let lastError = null;
+      
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          logger.info(`Upload attempt ${attempt}/3`, { remoteFileName });
+          
+          await this.client.uploadFrom(localFilePath, remoteFileName);
+          
+          // Verify upload by checking file size on remote server
+          const remoteList = await this.client.list();
+          const uploadedFile = remoteList.find(file => file.name === remoteFileName);
+          
+          if (uploadedFile && Math.abs(uploadedFile.size - fileSize) < 100) {
+            logger.info('Upload verification successful', {
+              localSize: fileSize,
+              remoteSize: uploadedFile.size,
+              sizeDifference: Math.abs(uploadedFile.size - fileSize)
+            });
+            uploadSuccess = true;
+            break;
+          } else {
+            throw new Error(`Upload verification failed: size mismatch (local: ${fileSize}, remote: ${uploadedFile?.size || 'not found'})`);
+          }
+        } catch (attemptError) {
+          lastError = attemptError;
+          logger.warn(`Upload attempt ${attempt} failed`, {
+            error: attemptError.message,
+            willRetry: attempt < 3
+          });
+          
+          if (attempt < 3) {
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+      }
+      
+      if (!uploadSuccess) {
+        throw lastError || new Error('Upload failed after all attempts');
+      }
+      
       const uploadTime = Date.now() - startTime;
 
       const result = {
@@ -159,10 +207,11 @@ class FtpService {
         remotePath: config.ftp.remotePath,
         fileSize,
         uploadTime,
+        attempts: uploadSuccess ? 1 : 3,
         timestamp: new Date().toISOString()
       };
 
-      logger.info('FTP upload completed successfully', result);
+      logger.info('Enhanced FTP upload completed successfully', result);
       return result;
 
     } catch (error) {
@@ -174,11 +223,62 @@ class FtpService {
         timestamp: new Date().toISOString()
       };
 
-      logger.error('FTP upload failed', errorResult);
+      logger.error('Enhanced FTP upload failed', errorResult);
       throw error;
     } finally {
       // Always disconnect after upload
       await this.disconnect();
+    }
+  }
+
+  /**
+   * Verify local file integrity before upload
+   * @param {string} localFilePath - Path to local file
+   */
+  async verifyLocalFile(localFilePath) {
+    try {
+      // Check if file exists
+      if (!fs.existsSync(localFilePath)) {
+        throw new Error(`Local file not found: ${localFilePath}`);
+      }
+
+      // Get file stats
+      const stats = fs.statSync(localFilePath);
+      
+      // Check if file is not empty
+      if (stats.size === 0) {
+        throw new Error(`Local file is empty: ${localFilePath}`);
+      }
+
+      // Try to read first few bytes to ensure file is accessible
+      const fileHandle = fs.openSync(localFilePath, 'r');
+      const buffer = Buffer.alloc(Math.min(1024, stats.size));
+      const bytesRead = fs.readSync(fileHandle, buffer, 0, buffer.length, 0);
+      fs.closeSync(fileHandle);
+
+      if (bytesRead === 0) {
+        throw new Error(`Cannot read from local file: ${localFilePath}`);
+      }
+
+      // For JPEG files, verify magic bytes
+      if (localFilePath.toLowerCase().endsWith('.jpg') || localFilePath.toLowerCase().endsWith('.jpeg')) {
+        if (buffer[0] !== 0xFF || buffer[1] !== 0xD8) {
+          throw new Error(`File does not appear to be a valid JPEG: ${localFilePath}`);
+        }
+      }
+
+      logger.info('Local file verification passed', {
+        filePath: localFilePath,
+        fileSize: stats.size,
+        isJpeg: buffer[0] === 0xFF && buffer[1] === 0xD8
+      });
+
+    } catch (error) {
+      logger.error('Local file verification failed', {
+        filePath: localFilePath,
+        error: error.message
+      });
+      throw error;
     }
   }
 

@@ -3,7 +3,6 @@
  * Handles uploads to various stock photo services (123RF, Shutterstock, Adobe Stock)
  */
 
-const FTP = require('ftp');
 const fs = require('fs').promises;
 const path = require('path');
 const axios = require('axios');
@@ -12,6 +11,7 @@ const config = require('../config/config');
 const User = require('../models/User');
 const Image = require('../models/Image');
 const logger = require('../utils/logger');
+const ftpService = require('./ftpService');
 
 class StockUploadService {
   constructor() {
@@ -135,17 +135,15 @@ class StockUploadService {
   }
 
   /**
-   * Upload to 123RF via FTP
+   * Upload to 123RF via enhanced FTP service
    * @param {Object} image - Image document
    * @param {Object} serviceConfig - Service configuration
    * @param {Object} settings - Upload settings
    * @returns {Promise<Object>} Upload result
    */
   async uploadTo123RF(image, serviceConfig, settings) {
-    return new Promise((resolve, reject) => {
-      const client = new FTP();
-      
-      logger.info('Starting 123RF upload', {
+    try {
+      logger.info('Starting enhanced 123RF upload', {
         imageId: image.id,
         filename: image.file.filename,
         filePath: image.file.path,
@@ -153,126 +151,110 @@ class StockUploadService {
         dimensions: `${image.file.width}x${image.file.height}`
       });
 
-      // Check if file exists and get its stats
-      fs.access(image.file.path)
-        .then(() => fs.stat(image.file.path))
-        .then((fileStats) => {
-          logger.info('File verification successful', {
-            imageId: image.id,
-            filePath: image.file.path,
-            actualFileSize: fileStats.size,
-            expectedFileSize: image.file.size,
-            lastModified: fileStats.mtime
-          });
-          
-          // Verify file size matches what's in database
-          if (Math.abs(fileStats.size - image.file.size) > 1000) { // Allow 1KB difference
-            logger.warn('File size mismatch detected', {
-              imageId: image.id,
-              expectedSize: image.file.size,
-              actualSize: fileStats.size,
-              difference: Math.abs(fileStats.size - image.file.size)
-            });
-          }
-        })
-        .catch((fileError) => {
-          logger.error('File access failed', {
-            imageId: image.id,
-            filePath: image.file.path,
-            error: fileError.message
-          });
-          reject(new Error(`Image file not found at path: ${image.file.path}`));
-          return;
-        });
+      // Enhanced file verification with multiple checks
+      await this.verifyFileReadiness(image);
 
-      client.on('ready', () => {
-        logger.info('FTP connection established', {
-          host: serviceConfig.credentials.ftpHost,
-          user: serviceConfig.credentials.username
-        });
+      // Generate remote filename
+      const timestamp = Date.now();
+      const extension = path.extname(image.file.filename);
+      // Clean title for filename - remove spaces and special characters
+      const cleanTitle = this.sanitizeFilename(settings.title || 'ai_image');
+      const remoteFileName = `${cleanTitle}_${timestamp}${extension}`;
 
-        // Change to remote directory
-        const remotePath = serviceConfig.credentials.remotePath || '/ai_image';
-        client.cwd(remotePath, (cwdErr) => {
-          if (cwdErr) {
-            logger.error('Failed to change directory', {
-              remotePath,
-              error: cwdErr.message
-            });
-            client.end();
-            reject(new Error(`Failed to change to directory ${remotePath}: ${cwdErr.message}`));
-            return;
-          }
-
-          logger.info('Changed to remote directory', { remotePath });
-
-          // Set binary mode explicitly
-          client.binary((binaryErr) => {
-            if (binaryErr) {
-              logger.error('Failed to set binary mode', { error: binaryErr.message });
-              client.end();
-              reject(new Error(`Failed to set binary mode: ${binaryErr.message}`));
-              return;
-            }
-
-            logger.info('Set binary transfer mode');
-
-            // Generate remote filename
-            const timestamp = Date.now();
-            const extension = path.extname(image.file.filename);
-            // Clean title for filename - remove spaces and special characters
-            const cleanTitle = this.sanitizeFilename(settings.title || 'ai_image');
-            const remoteFileName = `${cleanTitle}_${timestamp}${extension}`;
-
-            logger.info('Uploading file', {
-              localPath: image.file.path,
-              remoteFileName
-            });
-
-            // Upload ONLY the image file (NO metadata .txt file)
-            client.put(image.file.path, remoteFileName, (putErr) => {
-              if (putErr) {
-                logger.error('123RF FTP upload failed', {
-                  imageId: image.id,
-                  error: putErr.message
-                });
-                client.end();
-                reject(new Error(`123RF upload failed: ${putErr.message}`));
-                return;
-              }
-
-              logger.info('File uploaded successfully', {
-                remoteFileName,
-                note: 'No metadata file created - image only upload'
-              });
-
-              const result = {
-                externalId: remoteFileName,
-                uploadUrl: `ftp://${serviceConfig.credentials.ftpHost}${remotePath}/${remoteFileName}`,
-                remoteFilePath: `${remotePath}/${remoteFileName}`,
-                remoteFileName
-              };
-
-              client.end();
-              resolve(result);
-            });
-          });
-        });
+      logger.info('Uploading file via enhanced FTP service', {
+        localPath: image.file.path,
+        remoteFileName
       });
 
-      client.on('error', (err) => {
-        logger.error('FTP connection error', { error: err.message });
-        reject(new Error(`FTP connection failed: ${err.message}`));
+      // Use our enhanced FTP service for upload
+      const uploadResult = await ftpService.uploadImage(image.file.path, {
+        title: settings.title,
+        description: settings.description,
+        keywords: settings.keywords
       });
 
-      // Connect to FTP server
-      client.connect({
-        host: serviceConfig.credentials.ftpHost,
-        port: serviceConfig.credentials.ftpPort,
-        user: serviceConfig.credentials.username,
-        password: serviceConfig.credentials.password
+      logger.info('Enhanced 123RF upload completed successfully', {
+        imageId: image.id,
+        remoteFileName: uploadResult.remoteFile,
+        uploadTime: uploadResult.uploadTime,
+        fileSize: uploadResult.fileSize
       });
-    });
+
+      const remotePath = serviceConfig.credentials.remotePath || '/ai_image';
+      
+      return {
+        externalId: uploadResult.remoteFile,
+        uploadUrl: `ftp://${serviceConfig.credentials.ftpHost}${remotePath}/${uploadResult.remoteFile}`,
+        remoteFilePath: `${remotePath}/${uploadResult.remoteFile}`,
+        remoteFileName: uploadResult.remoteFile,
+        uploadTime: uploadResult.uploadTime,
+        fileSize: uploadResult.fileSize
+      };
+
+    } catch (error) {
+      logger.error('Enhanced 123RF upload failed', {
+        imageId: image.id,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Verify file readiness before upload
+   * @param {Object} image - Image document
+   */
+  async verifyFileReadiness(image) {
+    try {
+      // Check if file exists
+      await fs.access(image.file.path);
+      
+      // Get file stats
+      const fileStats = await fs.stat(image.file.path);
+      
+      logger.info('File verification successful', {
+        imageId: image.id,
+        filePath: image.file.path,
+        actualFileSize: fileStats.size,
+        expectedFileSize: image.file.size,
+        lastModified: fileStats.mtime
+      });
+      
+      // Verify file size matches what's in database
+      if (Math.abs(fileStats.size - image.file.size) > 1000) { // Allow 1KB difference
+        logger.warn('File size mismatch detected', {
+          imageId: image.id,
+          expectedSize: image.file.size,
+          actualSize: fileStats.size,
+          difference: Math.abs(fileStats.size - image.file.size)
+        });
+      }
+
+      // Additional verification: try to read a small portion of the file
+      const fileHandle = await fs.open(image.file.path, 'r');
+      const buffer = Buffer.alloc(1024);
+      await fileHandle.read(buffer, 0, 1024, 0);
+      await fileHandle.close();
+
+      // Verify the file is a valid JPEG by checking magic bytes
+      if (buffer[0] !== 0xFF || buffer[1] !== 0xD8) {
+        throw new Error('File does not appear to be a valid JPEG');
+      }
+
+      logger.info('File integrity verification passed', {
+        imageId: image.id,
+        jpegMagicBytes: `${buffer[0].toString(16)},${buffer[1].toString(16)}`
+      });
+
+      return fileStats;
+    } catch (fileError) {
+      logger.error('File verification failed', {
+        imageId: image.id,
+        filePath: image.file.path,
+        error: fileError.message
+      });
+      throw new Error(`Image file verification failed: ${fileError.message}`);
+    }
   }
 
   /**
@@ -433,54 +415,33 @@ class StockUploadService {
   }
 
   /**
-   * Test 123RF FTP connection
+   * Test 123RF FTP connection using enhanced FTP service
    * @param {Object} serviceConfig - Service configuration
    * @returns {Promise<Object>} Test result
    */
   async test123RFConnection(serviceConfig) {
-    return new Promise((resolve, reject) => {
-      const client = new FTP();
+    try {
+      // Use our enhanced FTP service for connection testing
+      const testResult = await ftpService.testConnection();
       
-      client.on('ready', () => {
-        // Try to list directory
-        const remotePath = serviceConfig.credentials.remotePath || '/ai_image';
-        client.cwd(remotePath, (cwdErr) => {
-          if (cwdErr) {
-            client.end();
-            reject(new Error(`Failed to access directory ${remotePath}: ${cwdErr.message}`));
-            return;
-          }
-
-          client.list((listErr, files) => {
-            client.end();
-            
-            if (listErr) {
-              reject(new Error(`Failed to list directory: ${listErr.message}`));
-              return;
-            }
-
-            resolve({
-              connected: true,
-              host: serviceConfig.credentials.ftpHost,
-              remotePath,
-              fileCount: files.length
-            });
-          });
-        });
-      });
-
-      client.on('error', (err) => {
-        reject(new Error(`123RF FTP connection failed: ${err.message}`));
-      });
-
-      // Connect to FTP server
-      client.connect({
+      if (testResult.success) {
+        return {
+          connected: true,
+          host: serviceConfig.credentials.ftpHost,
+          remotePath: serviceConfig.credentials.remotePath || '/ai_image',
+          directoryCount: testResult.directoryCount,
+          message: 'Enhanced FTP connection test successful'
+        };
+      } else {
+        throw new Error(testResult.error || 'FTP connection test failed');
+      }
+    } catch (error) {
+      logger.error('Enhanced 123RF FTP connection test failed', {
         host: serviceConfig.credentials.ftpHost,
-        port: serviceConfig.credentials.ftpPort,
-        user: serviceConfig.credentials.username,
-        password: serviceConfig.credentials.password
+        error: error.message
       });
-    });
+      throw new Error(`123RF FTP connection failed: ${error.message}`);
+    }
   }
 
   /**

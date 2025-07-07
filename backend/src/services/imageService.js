@@ -311,21 +311,20 @@ class ImageService {
       // Get image metadata using sharp
       const imageMetadata = await sharp(imageBuffer).metadata();
       
-      // Generate temporary filename for processing
+      // Generate final filename directly (no temporary files)
       const tempHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
-      const tempFilename = `${Date.now()}_${tempHash.substring(0, 16)}_temp.jpg`;
-      const tempFilePath = path.join(this.tempDir, tempFilename);
-
-      // Save original image temporarily
-      await fs.writeFile(tempFilePath, imageBuffer);
-
-      // Generate final filename
       const finalFilename = `${Date.now()}_${tempHash.substring(0, 16)}.jpg`;
       const finalFilePath = path.join(this.tempDir, finalFilename);
 
-      // Process image with sharp to ensure valid dimensions for 123RF
+      logger.info('Processing image with Sharp', {
+        originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
+        originalFileSize: imageBuffer.length,
+        targetSize: '4000x4000'
+      });
+
+      // Process image with sharp directly to final file
       // For 123RF, we need at least 4000x4000 pixels (6 megapixels) with 300 DPI
-      const processedImage = await sharp(tempFilePath)
+      const processedImage = await sharp(imageBuffer)
         .resize({
           width: 4000,
           height: 4000,
@@ -350,15 +349,18 @@ class ImageService {
         .toColorspace('srgb') // Force sRGB colorspace
         .toFile(finalFilePath);
 
-      // Remove temporary file
-      try {
-        await fs.unlink(tempFilePath);
-      } catch (unlinkError) {
-        logger.warn('Failed to delete temporary file', {
-          tempFilePath,
-          error: unlinkError.message
-        });
-      }
+      // Force file system sync to ensure file is completely written
+      const fileHandle = await fs.open(finalFilePath, 'r+');
+      await fileHandle.sync(); // Force sync to disk
+      await fileHandle.close();
+
+      logger.info('File sync completed', {
+        finalFilePath,
+        processedSize: processedImage.size
+      });
+
+      // Wait a small amount to ensure file system operations are complete
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Get final image metadata
       const finalImageMetadata = await sharp(finalFilePath).metadata();
@@ -367,9 +369,14 @@ class ImageService {
       const finalStats = await fs.stat(finalFilePath);
       const finalSize = finalStats.size;
 
+      // Verify file integrity by reading it back
+      const verificationBuffer = await fs.readFile(finalFilePath);
+      if (verificationBuffer.length !== finalSize) {
+        throw new Error(`File size mismatch after write: expected ${finalSize}, got ${verificationBuffer.length}`);
+      }
+
       // Generate hash of processed image
-      const processedImageBuffer = await fs.readFile(finalFilePath);
-      const finalHash = crypto.createHash('sha256').update(processedImageBuffer).digest('hex');
+      const finalHash = crypto.createHash('sha256').update(verificationBuffer).digest('hex');
 
       logger.info('Image processed successfully', {
         originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
