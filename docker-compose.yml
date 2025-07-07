@@ -13,7 +13,7 @@ services:
       - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
     volumes:
       # Persist MongoDB data
-      - mongodb_data:/data/db
+      - ./data/mongodb:/data/db
       # Custom initialization scripts
       - ./backend/docker/mongo-init:/docker-entrypoint-initdb.d
     networks:
@@ -47,8 +47,6 @@ services:
     networks:
       - ai-stock-bot-network
     restart: unless-stopped
-    profiles:
-      - backend
 
   # Telegram Bot Service
   tg-bot:
@@ -66,8 +64,6 @@ services:
     networks:
       - ai-stock-bot-network
     restart: unless-stopped
-    profiles:
-      - bot
 
   # MongoDB Express (Web UI for MongoDB)
   mongo-express:
@@ -86,14 +82,6 @@ services:
     networks:
       - ai-stock-bot-network
     restart: unless-stopped
-    profiles:
-      - tools
-
-# Named volumes for data persistence
-volumes:
-  mongodb_data:
-    driver: local
-    name: ai-stock-bot-mongodb-data
 
 # Custom network for service communication
 networks:
