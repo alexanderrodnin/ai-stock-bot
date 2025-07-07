@@ -4,7 +4,6 @@ const fs = require('fs');
 const path = require('path');
 const { cleanupTempFiles, downloadImage } = require('./download-image');
 const BackendApiService = require('./services/backendApiService');
-const mockImageUrls = require('./mock-image-urls');
 
 // Check if running in demo mode
 let DEMO_MODE = process.env.DEMO_MODE === 'true';
@@ -175,27 +174,6 @@ async function saveImageLocally(imageBuffer, imageId) {
   return filePath;
 }
 
-/**
- * Generate mock image in DEMO mode
- */
-async function generateMockImage(prompt) {
-  console.log('DEMO MODE: Generating mock image for prompt:', prompt);
-  
-  // Get appropriate mock image URL based on prompt
-  const mockUrl = mockImageUrls.getMockImageUrl(prompt);
-  console.log(`DEMO MODE: Using mock image from ${mockUrl}`);
-  
-  // Download the mock image to a local file
-  const localImagePath = await downloadImage(mockUrl);
-  console.log(`DEMO MODE: Mock image downloaded to ${localImagePath}`);
-  
-  return {
-    localPath: localImagePath,
-    source: 'Demo Mode',
-    model: null,
-    size: '1024x1024'
-  };
-}
 
 /**
  * Activate demo mode due to API error
@@ -1531,27 +1509,6 @@ async function handleCancelSetup(callbackQuery, user) {
   }
 }
 
-/**
- * Show setup help
- */
-async function showSetupHelp(chatId) {
-  const helpMessage = `ℹ️ *Помощь по настройке 123RF*
-
-**123RF:**
-• Нужен только логин и пароль от аккаунта
-• FTP настройки устанавливаются автоматически
-• Обычно совпадают с данными для входа на сайт
-• Поддерживается автоматическая загрузка изображений
-
-**Как получить данные:**
-1. Зайдите на сайт 123RF.com
-2. Используйте свой обычный логин и пароль
-3. Убедитесь, что у вас есть права на загрузку контента
-
-*Все данные хранятся в зашифрованном виде и используются только для загрузки ваших изображений.*`;
-
-  await bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
-}
 
 // Log when bot is started
 console.log('🤖 Telegram Bot (Backend Integration) is running...');
