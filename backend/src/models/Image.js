@@ -383,13 +383,6 @@ imageSchema.virtual('file.url').get(function() {
   return null;
 });
 
-// Virtual for thumbnail URL
-imageSchema.virtual('file.thumbnailUrl').get(function() {
-  if (this.file.path) {
-    return `/api/images/${this._id}/thumbnail`;
-  }
-  return null;
-});
 
 // Ensure virtual fields are serialized
 imageSchema.set('toJSON', {

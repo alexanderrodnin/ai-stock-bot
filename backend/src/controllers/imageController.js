@@ -222,7 +222,6 @@ class ImageController {
           images: images.map(img => ({
             id: img._id.toString(),
             url: `/api/images/${img._id}/file`,
-            thumbnailUrl: `/api/images/${img._id}/thumbnail`,
             prompt: img.generation.prompt,
             model: img.generation.model,
             size: img.generation.size,
@@ -378,11 +377,12 @@ class ImageController {
   }
 
   /**
-   * Serve image thumbnail
-   * GET /api/images/:imageId/thumbnail
+   * Stream image file for telegram bot
+   * GET /api/images/:imageId/stream
    */
-  async serveImageThumbnail(req, res) {
+  async streamImageFile(req, res) {
     const { imageId } = req.params;
+    const { userId } = req.query;
 
     try {
       const image = await Image.findOne({ 
@@ -400,42 +400,84 @@ class ImageController {
         });
       }
 
-      const thumbnailPath = image.file.thumbnailPath || image.file.path;
+      // Check access permissions
+      const hasAccess = !userId || 
+                       image.userId.toString() === userId || 
+                       (image.flags.isPublic && image.flags.moderationResult === 'approved');
 
-      // Check if thumbnail file exists
-      if (!fs.existsSync(thumbnailPath)) {
-        return res.status(404).json({
+      if (!hasAccess) {
+        return res.status(403).json({
           success: false,
           error: {
-            message: 'Thumbnail not found',
-            code: 'THUMBNAIL_NOT_FOUND'
+            message: 'Access denied',
+            code: 'ACCESS_DENIED'
           }
         });
       }
 
-      // Set appropriate headers
-      res.setHeader('Content-Type', 'image/jpeg');
+      // Check if file exists
+      if (!fs.existsSync(image.file.path)) {
+        return res.status(404).json({
+          success: false,
+          error: {
+            message: 'Image file not found',
+            code: 'FILE_NOT_FOUND'
+          }
+        });
+      }
+
+      // Set appropriate headers for streaming
+      res.setHeader('Content-Type', image.file.mimeType);
+      res.setHeader('Content-Length', image.file.size);
+      res.setHeader('Content-Disposition', `inline; filename="${image.file.filename}"`);
       res.setHeader('Cache-Control', 'public, max-age=31536000'); // 1 year cache
 
-      // Stream the thumbnail
-      const fileStream = fs.createReadStream(thumbnailPath);
+      // Create and pipe the file stream
+      const fileStream = fs.createReadStream(image.file.path);
+      
+      // Handle stream errors
+      fileStream.on('error', (error) => {
+        logger.error('Stream error while serving image', { 
+          imageId, 
+          error: error.message 
+        });
+        if (!res.headersSent) {
+          res.status(500).json({
+            success: false,
+            error: {
+              message: 'Failed to stream image',
+              code: 'STREAM_ERROR'
+            }
+          });
+        }
+      });
+
+      // Pipe the file stream to response
       fileStream.pipe(res);
 
+      // Increment view count (don't wait for it)
+      Image.findByIdAndUpdate(imageId, { $inc: { 'stats.views': 1 } }).catch(err => {
+        logger.warn('Failed to increment view count', { imageId, error: err.message });
+      });
+
     } catch (error) {
-      logger.error('Failed to serve thumbnail', { 
+      logger.error('Failed to stream image file', { 
         error: error.message, 
         imageId 
       });
 
-      res.status(500).json({
-        success: false,
-        error: {
-          message: 'Failed to serve thumbnail',
-          code: 'SERVE_THUMBNAIL_FAILED'
-        }
-      });
+      if (!res.headersSent) {
+        res.status(500).json({
+          success: false,
+          error: {
+            message: 'Failed to stream image',
+            code: 'STREAM_IMAGE_FAILED'
+          }
+        });
+      }
     }
   }
+
 
   /**
    * Update image metadata

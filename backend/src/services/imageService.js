@@ -245,7 +245,6 @@ class ImageService {
       return {
         id: imageRecord.id,
         url: imageRecord.file.url,
-        thumbnailUrl: imageRecord.file.thumbnailUrl,
         prompt: imageRecord.generation.prompt,
         revisedPrompt: imageRecord.generation.revisedPrompt,
         model: imageRecord.generation.model,
@@ -372,9 +371,6 @@ class ImageService {
       const processedImageBuffer = await fs.readFile(finalFilePath);
       const finalHash = crypto.createHash('sha256').update(processedImageBuffer).digest('hex');
 
-      // Generate thumbnail
-      const thumbnailPath = await this.generateThumbnail(finalFilePath, finalFilename);
-
       logger.info('Image processed successfully', {
         originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
         processedSize: `${finalImageMetadata.width}x${finalImageMetadata.height}`,
@@ -391,7 +387,6 @@ class ImageService {
         width: finalImageMetadata.width,
         height: finalImageMetadata.height,
         hash: finalHash,
-        thumbnailPath,
         processing: {
           originalWidth: imageMetadata.width,
           originalHeight: imageMetadata.height,
@@ -409,35 +404,6 @@ class ImageService {
     }
   }
 
-  /**
-   * Generate thumbnail for image
-   * @param {string} imagePath - Path to original image
-   * @param {string} originalFilename - Original filename
-   * @returns {Promise<string>} Thumbnail path
-   */
-  async generateThumbnail(imagePath, originalFilename) {
-    try {
-      const thumbnailSize = parseInt(process.env.THUMBNAIL_SIZE) || 300;
-      const thumbnailFilename = `thumb_${originalFilename}`;
-      const thumbnailPath = path.join(this.tempDir, thumbnailFilename);
-
-      await sharp(imagePath)
-        .resize(thumbnailSize, thumbnailSize, {
-          fit: 'inside',
-          withoutEnlargement: true
-        })
-        .jpeg({ quality: 80 })
-        .toFile(thumbnailPath);
-
-      return thumbnailPath;
-    } catch (error) {
-      logger.error('Failed to generate thumbnail', {
-        imagePath,
-        error: error.message
-      });
-      return null;
-    }
-  }
 
   /**
    * Get user images with pagination
@@ -473,7 +439,6 @@ class ImageService {
         images: images.map(img => ({
           id: img._id.toString(),
           url: `/api/images/${img._id}/file`,
-          thumbnailUrl: `/api/images/${img._id}/thumbnail`,
           prompt: img.generation.prompt,
           model: img.generation.model,
           size: img.generation.size,
@@ -534,7 +499,6 @@ class ImageService {
       return {
         id: image._id.toString(),
         url: `/api/images/${image._id}/file`,
-        thumbnailUrl: `/api/images/${image._id}/thumbnail`,
         prompt: image.generation.prompt,
         revisedPrompt: image.generation.revisedPrompt,
         model: image.generation.model,
@@ -618,9 +582,6 @@ class ImageService {
         if (image.file.path) {
           await fs.unlink(image.file.path);
         }
-        if (image.file.thumbnailPath) {
-          await fs.unlink(image.file.thumbnailPath);
-        }
       } catch (fileError) {
         logger.warn('Failed to delete image files', {
           imageId,
@@ -674,6 +635,48 @@ class ImageService {
       return path.basename(urlPath) || 'image.jpg';
     } catch {
       return 'image.jpg';
+    }
+  }
+
+  /**
+   * Clean up temporary files older than the specified age
+   * @param {number} maxAgeMs - Maximum age in milliseconds (default: 24 hours)
+   */
+  async cleanupTempFiles(maxAgeMs = 86400000) {
+    try {
+      const files = await fs.readdir(this.tempDir);
+      const now = Date.now();
+      let deletedCount = 0;
+      
+      for (const file of files) {
+        try {
+          const filePath = path.join(this.tempDir, file);
+          const stats = await fs.stat(filePath);
+          
+          // Check if the file is older than maxAgeMs
+          if (now - stats.mtime.getTime() > maxAgeMs) {
+            await fs.unlink(filePath);
+            deletedCount++;
+            logger.info('Deleted old temp file', { file, age: now - stats.mtime.getTime() });
+          }
+        } catch (fileError) {
+          logger.warn('Error processing temp file during cleanup', {
+            file,
+            error: fileError.message
+          });
+        }
+      }
+      
+      logger.info('Temp files cleanup completed', {
+        totalFiles: files.length,
+        deletedFiles: deletedCount
+      });
+      
+    } catch (error) {
+      logger.error('Error during temp files cleanup', {
+        error: error.message,
+        tempDir: this.tempDir
+      });
     }
   }
 

@@ -310,22 +310,22 @@ class BackendApiService {
     }
   }
 
+
   /**
-   * Download image from backend
+   * Get image stream from backend for direct telegram sending
    * @param {string} imageId Image ID
    * @param {string} userId User ID
-   * @param {string} type Image type ('file' or 'thumbnail')
-   * @returns {Promise<Buffer>} Image buffer
+   * @returns {Promise<Stream>} Image stream
    */
-  async downloadImage(imageId, userId, type = 'file') {
+  async getImageStream(imageId, userId) {
     try {
-      const response = await this.client.get(`/images/${imageId}/${type}?userId=${userId}`, {
-        responseType: 'arraybuffer'
+      const response = await this.client.get(`/images/${imageId}/stream?userId=${userId}`, {
+        responseType: 'stream'
       });
-      return Buffer.from(response.data);
+      return response.data;
     } catch (error) {
-      console.error('Error downloading image:', error.message);
-      throw new Error(`Failed to download image: ${error.message}`);
+      console.error('Error getting image stream:', error.message);
+      throw new Error(`Failed to get image stream: ${error.message}`);
     }
   }
 

@@ -1,8 +1,5 @@
 require('dotenv').config();
 const TelegramBot = require('node-telegram-bot-api');
-const fs = require('fs');
-const path = require('path');
-const { cleanupTempFiles, downloadImage } = require('./download-image');
 const BackendApiService = require('./services/backendApiService');
 
 // Check if running in demo mode
@@ -14,12 +11,6 @@ if (DEMO_MODE) {
 } else {
   console.log('Running in NORMAL MODE - using backend API with OpenAI integration');
 }
-
-// Clean up temporary files every 24 hours
-setInterval(() => {
-  console.log('Cleaning up temporary image files...');
-  cleanupTempFiles();
-}, 86400000); // 24 hours
 
 // Check for required environment variables
 if (!process.env.TELEGRAM_TOKEN) {
@@ -75,21 +66,6 @@ async function initializeUser(telegramUser) {
   }
 }
 
-/**
- * Check if backend is available
- */
-async function checkBackendHealth() {
-  try {
-    const isAvailable = await backendApi.isAvailable();
-    if (!isAvailable) {
-      console.warn('Backend API is not available');
-    }
-    return isAvailable;
-  } catch (error) {
-    console.error('Backend health check failed:', error.message);
-    return false;
-  }
-}
 
 /**
  * Show stock setup menu
@@ -114,6 +90,34 @@ async function showStockSetupMenu(chatId, userId) {
     parse_mode: 'Markdown',
     reply_markup: keyboard
   });
+}
+
+/**
+ * Show setup help information
+ */
+async function showSetupHelp(chatId) {
+  const helpMessage = `ℹ️ *Помощь по настройке стоковых сервисов*
+
+*123RF:*
+• Нужен аккаунт на 123rf.com
+• Используются логин и пароль от аккаунта
+• FTP настройки устанавливаются автоматически
+• После настройки можно загружать изображения
+
+*Требования к изображениям:*
+• Минимум 4000x4000 пикселей
+• Формат JPEG
+• Качество не менее 300 DPI
+• Соответствие правилам контента 123RF
+
+*Безопасность:*
+• Все данные шифруются при хранении
+• Соединение защищено SSL/TLS
+• Данные используются только для загрузки
+
+Если у вас есть вопросы, обратитесь к документации 123RF или в поддержку.`;
+
+  await bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
 }
 
 /**
@@ -159,20 +163,21 @@ async function getAvailableStockServices(userId) {
 }
 
 /**
- * Save image locally for Telegram
+ * Check if backend is available
  */
-async function saveImageLocally(imageBuffer, imageId) {
-  const tempDir = path.join(__dirname, 'temp');
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
+async function checkBackendHealth() {
+  try {
+    const isAvailable = await backendApi.isAvailable();
+    if (!isAvailable) {
+      console.warn('Backend API is not available');
+    }
+    return isAvailable;
+  } catch (error) {
+    console.error('Backend health check failed:', error.message);
+    return false;
   }
-  
-  const fileName = `${imageId}_${Date.now()}.jpg`;
-  const filePath = path.join(tempDir, fileName);
-  
-  fs.writeFileSync(filePath, imageBuffer);
-  return filePath;
 }
+
 
 
 /**
@@ -394,11 +399,8 @@ bot.on('message', async (msg) => {
         }
       });
 
-      // Download image from backend
-      const imageBuffer = await backendApi.downloadImage(imageData.id, user.id, 'file');
-      
-      // Save image locally for Telegram
-      const localImagePath = await saveImageLocally(imageBuffer, imageData.id);
+      // Get image stream from backend for direct sending
+      const imageStream = await backendApi.getImageStream(imageData.id, user.id);
       
       // Get available stock services for this user
       const availableServices = await getAvailableStockServices(user.id);
@@ -425,17 +427,16 @@ bot.on('message', async (msg) => {
       // Create inline keyboard with upload options
       const keyboard = getImageActionsKeyboard(imageData.id, user.id, availableServices);
       
-      // Store the image data in cache for callback operations
+      // Store the image data in cache for callback operations (without local path)
       userImageCache.set(msg.from.id, {
         imageId: imageData.id,
-        localPath: localImagePath,
         prompt: prompt
       });
       
       console.log(`Stored image data in cache for user ${msg.from.id}: ${imageData.id}`);
       
-      // Send the image
-      await bot.sendPhoto(chatId, fs.createReadStream(localImagePath), {
+      // Send the image using stream directly from backend
+      await bot.sendPhoto(chatId, imageStream, {
         caption: caption,
         parse_mode: 'Markdown',
         reply_markup: keyboard

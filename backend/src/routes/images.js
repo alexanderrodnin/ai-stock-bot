@@ -192,15 +192,20 @@ router.get('/:imageId/file', [
 ], asyncHandler(imageController.serveImageFile));
 
 /**
- * @route   GET /api/images/:imageId/thumbnail
- * @desc    Serve image thumbnail
+ * @route   GET /api/images/:imageId/stream
+ * @desc    Stream image file for telegram bot
  * @access  Public
  */
-router.get('/:imageId/thumbnail', [
+router.get('/:imageId/stream', [
   param('imageId')
     .isMongoId()
-    .withMessage('Invalid image ID format')
-], asyncHandler(imageController.serveImageThumbnail));
+    .withMessage('Invalid image ID format'),
+  query('userId')
+    .optional()
+    .isMongoId()
+    .withMessage('Invalid user ID format')
+], asyncHandler(imageController.streamImageFile));
+
 
 /**
  * @route   PUT /api/images/:imageId/metadata
