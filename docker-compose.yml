@@ -15,7 +15,7 @@ services:
       # Persist MongoDB data
       - mongodb_data:/data/db
       # Custom initialization scripts
-      - ./docker/mongo-init:/docker-entrypoint-initdb.d
+      - ./backend/docker/mongo-init:/docker-entrypoint-initdb.d
     networks:
       - ai-stock-bot-network
     restart: unless-stopped
@@ -24,7 +24,7 @@ services:
   # Backend API Service
   backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
       target: development
     container_name: ai-stock-bot-backend
@@ -39,14 +39,35 @@ services:
       - PORT=${PORT}
     volumes:
       # Mount source code for development hot reload
-      - ./src:/app/src
-      - ./package.json:/app/package.json
-      - ./package-lock.json:/app/package-lock.json
+      - ./backend/src:/app/src
+      - ./backend/package.json:/app/package.json
+      - ./backend/package-lock.json:/app/package-lock.json
     depends_on:
       - mongodb
     networks:
       - ai-stock-bot-network
     restart: unless-stopped
+    profiles:
+      - backend
+
+  # Telegram Bot Service
+  tg-bot:
+    build:
+      context: ./tg-bot
+      dockerfile: Dockerfile
+    container_name: ai-stock-bot-telegram
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - BACKEND_API_URL=http://backend:${PORT}/api
+      - BACKEND_API_TIMEOUT=${BACKEND_API_TIMEOUT}
+      - DEMO_MODE=${DEMO_MODE}
+    depends_on:
+      - backend
+    networks:
+      - ai-stock-bot-network
+    restart: unless-stopped
+    profiles:
+      - bot
 
   # MongoDB Express (Web UI for MongoDB)
   mongo-express:

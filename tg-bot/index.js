@@ -975,7 +975,16 @@ async function handleImageUpload(callbackQuery, user) {
     await bot.deleteMessage(chatId, statusMessage.message_id);
     
     if (uploadResult.success) {
-      const successMessage = `✅ *Изображение успешно загружено на ${service.toUpperCase()}!*\n\n`;
+      let successMessage;
+      if (service === '123rf') {
+        successMessage = `✅ *Изображение успешно загружено на 123RF!*
+
+Чтобы принять изображение, перейдите по [ссылке](https://www.123rf.com/contributor/upload-content?category=ai-images) и нажмите "Upload via FTP", а затем "Proceed".
+
+Изображение появится в Manage content во вкладке "Draft". Нажмите на него, заполните описание и теги, после чего отправьте на проверку.`;
+      } else {
+        successMessage = `✅ *Изображение успешно загружено на ${service.toUpperCase()}!*\n\n`;
+      }
       await bot.sendMessage(chatId, successMessage, { parse_mode: 'Markdown' });
     } else {
       await bot.sendMessage(chatId, 
