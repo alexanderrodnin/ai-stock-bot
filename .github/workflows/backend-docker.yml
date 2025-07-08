@@ -1,0 +1,52 @@
+name: Build and Push Backend Docker Image
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-docker.yml'
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_PAT }}
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ vars.DOCKER_HUB_USER }}/ai-stock-bot-backend
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+      
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ vars.DOCKER_HUB_USER }}/ai-stock-bot-backend:buildcache
+          cache-to: type=registry,ref=${{ vars.DOCKER_HUB_USER }}/ai-stock-bot-backend:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64
+      
+      - name: Image digest
+        run: echo ${{ steps.build.outputs.digest }}

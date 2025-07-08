@@ -8,9 +8,16 @@ const app = require('./app');
 const config = require('./config/config');
 const connectDB = require('./config/database');
 const logger = require('./utils/logger');
+const imageService = require('./services/imageService');
 
 // Connect to MongoDB
 connectDB();
+
+// Clean up temporary files every 24 hours
+setInterval(() => {
+  logger.info('Cleaning up temporary image files...');
+  imageService.cleanupTempFiles();
+}, 86400000); // 24 hours
 
 const PORT = config.port || 3000;
 

@@ -30,26 +30,29 @@
   "author": "AI Stock Bot Team",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "helmet": "^7.1.0",
-    "express-rate-limit": "^7.1.5",
-    "express-validator": "^7.0.1",
-    "mongoose": "^8.0.3",
-    "dotenv": "^16.3.1",
-    "morgan": "^1.10.0",
-    "multer": "^1.4.5-lts.1",
-    "joi": "^17.11.0",
     "axios": "^1.6.2",
     "basic-ftp": "^5.0.3",
-    "uuid": "^9.0.1",
-    "compression": "^1.7.4"
+    "compression": "^1.7.4",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.1.5",
+    "express-validator": "^7.0.1",
+    "ftp": "^0.3.10",
+    "helmet": "^7.1.0",
+    "joi": "^17.11.0",
+    "mongoose": "^8.0.3",
+    "morgan": "^1.10.0",
+    "multer": "^1.4.5-lts.1",
+    "openai": "^5.8.2",
+    "sharp": "^0.34.2",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.2",
+    "eslint": "^8.55.0",
     "jest": "^29.7.0",
-    "supertest": "^6.3.3",
-    "eslint": "^8.55.0"
+    "nodemon": "^3.0.2",
+    "supertest": "^6.3.3"
   },
   "engines": {
     "node": ">=18.0.0"

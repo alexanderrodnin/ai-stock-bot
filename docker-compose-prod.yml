@@ -1,0 +1,146 @@
+services:
+  # MongoDB Database Service
+  mongodb:
+    image: mongo:7.0.5
+    container_name: ai-stock-bot-mongodb-prod
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
+      - MONGO_INITDB_DATABASE=${MONGO_INITDB_DATABASE}
+    volumes:
+      # Persist MongoDB data using named volume for production
+      - mongodb_data_prod:/data/db
+      # Custom initialization scripts
+      - ./backend/docker/mongo-init:/docker-entrypoint-initdb.d
+    networks:
+      - ai-stock-bot-network-prod
+    restart: unless-stopped
+    command: mongod --bind_ip_all
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '0.5'
+    labels:
+      - "com.centurylinklabs.watchtower.enable=false"  # Don't update MongoDB
+
+  # Backend API Service (Production)
+  backend:
+    image: alexanderrodnin/ai-stock-bot-backend:latest
+    container_name: ai-stock-bot-backend-prod
+    ports:
+      - "${PORT}:${PORT}"
+    environment:
+      - NODE_ENV=development  # Still development, but on server
+      - MONGODB_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_INITDB_DATABASE}?authSource=admin
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+      - PORT=${PORT}
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - ai-stock-bot-network-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT}/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '0.5'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.scope=ai-stock-bot"
+
+  # Telegram Bot Service (Production)
+  tg-bot:
+    image: alexanderrodnin/ai-stock-bot-tg-bot:latest
+    container_name: ai-stock-bot-telegram-prod
+    environment:
+      - TELEGRAM_TOKEN=${TELEGRAM_TOKEN}
+      - BACKEND_API_URL=http://backend:${PORT}/api
+      - BACKEND_API_TIMEOUT=${BACKEND_API_TIMEOUT}
+      - DEMO_MODE=${DEMO_MODE}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - ai-stock-bot-network-prod
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "node", "-e", "process.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+      - "com.centurylinklabs.watchtower.scope=ai-stock-bot"
+
+  # Watchtower - Automatic Docker Image Updates
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: ai-stock-bot-watchtower
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - WATCHTOWER_POLL_INTERVAL=30  # Check every 30 seconds
+      - WATCHTOWER_CLEANUP=true      # Remove old images after update
+      - WATCHTOWER_INCLUDE_STOPPED=true
+      - WATCHTOWER_SCOPE=ai-stock-bot
+      - WATCHTOWER_NOTIFICATIONS=shoutrrr
+      - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_NOTIFICATION_URL:-}  # Optional: webhook for notifications
+      - WATCHTOWER_DEBUG=true
+      - WATCHTOWER_LOG_LEVEL=info
+    networks:
+      - ai-stock-bot-network-prod
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+          cpus: '0.1'
+    labels:
+      - "com.centurylinklabs.watchtower.scope=ai-stock-bot"
+      - "com.centurylinklabs.watchtower.enable=false"  # Don't update watchtower itself
+
+# Named volumes for production data persistence
+volumes:
+  mongodb_data_prod:
+    driver: local
+    name: ai-stock-bot-mongodb-data-prod
+
+# Custom network for service communication
+networks:
+  ai-stock-bot-network-prod:
+    driver: bridge
+    name: ai-stock-bot-network-prod

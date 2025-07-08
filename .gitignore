@@ -111,3 +111,29 @@ Thumbs.db
 build/
 dist/
 out/
+
+# Test files and temporary scripts
+test-*.js
+test-*.sh
+*-test.js
+*-debug.js
+reset-*.js
+
+# Temporary files and directories
+temp/
+tmp/
+*.tmp
+*.temp
+
+# MongoDB data directory (for development)
+data/
+
+# Generated files
+generated/
+output/
+uploads/
+
+# Development and debugging files
+debug.log
+error.log
+access.log

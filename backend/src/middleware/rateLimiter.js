@@ -48,8 +48,8 @@ const defaultLimiter = rateLimit({
 
 // Strict rate limiter for image generation (more resource intensive)
 const imageGenerationLimiter = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 10, // 10 requests per 5 minutes
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute (for testing)
   standardHeaders: true,
   legacyHeaders: false,
   
