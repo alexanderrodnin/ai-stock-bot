@@ -648,7 +648,7 @@ async function handleSetupStep(msg, session) {
           // Set default FTP settings for 123RF
           session.data.ftpHost = 'ftp.123rf.com';
           session.data.ftpPort = 21;
-          session.data.remotePath = '/ai_images';
+          session.data.remotePath = '/ai_image';
           
           // Show confirmation for 123RF with inline buttons
           const passwordLength = (session.data.password || '').length;
@@ -1425,7 +1425,7 @@ async function handleSkipPassword(callbackQuery, user) {
     // Set default FTP settings for 123RF
     session.data.ftpHost = 'ftp.123rf.com';
     session.data.ftpPort = 21;
-    session.data.remotePath = '/ai_images';
+    session.data.remotePath = '/ai_image';
     
     const serviceNames = {
       '123rf': '123RF',

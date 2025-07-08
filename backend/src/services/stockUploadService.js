@@ -166,12 +166,22 @@ class StockUploadService {
         remoteFileName
       });
 
-      // Use our enhanced FTP service for upload
-      const uploadResult = await ftpService.uploadImage(image.file.path, {
+      // Prepare FTP credentials from user's service config
+      const ftpCredentials = {
+        host: serviceConfig.credentials.ftpHost,
+        port: serviceConfig.credentials.ftpPort || 21,
+        user: serviceConfig.credentials.username,
+        password: serviceConfig.credentials.password,
+        secure: false,
+        remotePath: serviceConfig.credentials.remotePath || '/ai_image'
+      };
+
+      // Use our enhanced FTP service for upload with user credentials
+      const uploadResult = await ftpService.uploadImageWithCredentials(image.file.path, {
         title: settings.title,
         description: settings.description,
         keywords: settings.keywords
-      });
+      }, ftpCredentials);
 
       logger.info('Enhanced 123RF upload completed successfully', {
         imageId: image.id,
@@ -421,8 +431,24 @@ class StockUploadService {
    */
   async test123RFConnection(serviceConfig) {
     try {
-      // Use our enhanced FTP service for connection testing
-      const testResult = await ftpService.testConnection();
+      // Prepare FTP credentials from user's service config
+      const ftpCredentials = {
+        host: serviceConfig.credentials.ftpHost,
+        port: serviceConfig.credentials.ftpPort || 21,
+        user: serviceConfig.credentials.username,
+        password: serviceConfig.credentials.password,
+        secure: false,
+        remotePath: serviceConfig.credentials.remotePath || '/ai_image'
+      };
+
+      logger.info('Testing 123RF FTP connection with user credentials', {
+        host: ftpCredentials.host,
+        user: ftpCredentials.user,
+        remotePath: ftpCredentials.remotePath
+      });
+
+      // Use our enhanced FTP service for connection testing with user credentials
+      const testResult = await ftpService.testConnection(ftpCredentials);
       
       if (testResult.success) {
         return {

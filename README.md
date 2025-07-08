@@ -91,15 +91,14 @@ ai-stock-bot/
 │   │   ├── services/       # Бизнес-логика
 │   │   └── utils/          # Утилиты
 │   ├── Dockerfile
-│   ├── docker-compose.yml
 │   └── package.json
 ├── tg-bot/                 # Telegram Bot сервис
 │   ├── services/           # Сервисы бота
 │   ├── Dockerfile
-│   ├── docker-compose.yml
 │   ├── index.js           # Основной файл бота
 │   └── package.json
-├── docker-compose.yml      # Основная оркестрация
+├── docker-compose.yml      # Разработка
+├── docker-compose-prod.yml # Продакшен
 ├── .env.example           # Пример переменных окружения
 └── README.md
 ```

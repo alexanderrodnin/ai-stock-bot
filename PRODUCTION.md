@@ -29,10 +29,9 @@ docker-compose -f docker-compose-prod.yml logs -f
 
 ## 📦 Используемые Docker образы
 
-- **Backend**: `alexanderrodnin/ai-stock-bot-backend:backend`
-- **Telegram Bot**: `alexanderrodnin/ai-stock-bot-tg-bot:backend`
+- **Backend**: `alexanderrodnin/ai-stock-bot-backend:latest`
+- **Telegram Bot**: `alexanderrodnin/ai-stock-bot-tg-bot:latest`
 - **MongoDB**: `mongo:7.0.5`
-- **MongoDB Express**: `mongo-express:1.0.0`
 - **Watchtower**: `containrrr/watchtower:latest`
 
 ## 🔄 Автоматические обновления (Watchtower)

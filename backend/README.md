@@ -48,41 +48,47 @@ API будет доступен по адресу: `http://localhost:3000`
 
 ### Запуск через Docker (рекомендуемый)
 
-1. Скопируйте файл переменных окружения для Docker:
+1. Перейдите в корневую директорию проекта:
 ```bash
-cp .env.docker .env
+cd ..  # из папки backend в корень проекта
 ```
 
-2. Заполните обязательные переменные в `.env`:
+2. Скопируйте файл переменных окружения:
+```bash
+cp .env.example .env
+```
+
+3. Заполните обязательные переменные в `.env`:
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
-FTP_USER=your_ftp_username
-FTP_PASSWORD=your_ftp_password
+TELEGRAM_TOKEN=your_telegram_bot_token
+JWT_SECRET=your_jwt_secret_key
+ENCRYPTION_KEY=your_32_character_encryption_key
 ```
 
-3. Запустите сервисы:
+4. Запустите сервисы:
 ```bash
-# Запуск с автоматической сборкой
-npm run docker:up:build
+# Запуск только backend и MongoDB
+docker-compose --profile backend up -d
 
-# Или используйте docker-compose напрямую
-docker-compose up -d --build
+# Или полный стек с Telegram Bot
+docker-compose --profile backend --profile bot up -d
 ```
 
-4. Проверьте статус сервисов:
+5. Проверьте статус сервисов:
 ```bash
 docker-compose ps
 ```
 
-5. Просмотр логов:
+6. Просмотр логов:
 ```bash
-npm run docker:logs
+docker-compose logs -f backend
 ```
 
 Сервисы будут доступны:
 - **Backend API**: http://localhost:3000
 - **MongoDB**: localhost:27017
-- **Mongo Express** (опционально): http://localhost:8081
+- **Mongo Express** (с --profile tools): http://localhost:8081
 
 ## 📋 API Endpoints
 

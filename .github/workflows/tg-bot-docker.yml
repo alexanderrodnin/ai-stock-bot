@@ -2,7 +2,7 @@ name: Build and Push Telegram Bot Docker Image
 
 on:
   push:
-    branches: [ main, backend ]
+    branches: [ main ]
     paths:
       - 'tg-bot/**'
       - '.github/workflows/tg-bot-docker.yml'
