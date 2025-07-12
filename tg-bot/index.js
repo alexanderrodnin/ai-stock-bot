@@ -81,14 +81,12 @@ async function showStockSetupMenu(chatId, userId) {
     ]
   };
 
-  const message = `🔧 *Настройка стоковых сервисов*
-
-Приоритет сервисов: Adobe Stock → Freepik → Pixta → 123RF
+  const message = `🔧 <b>Настройка стоковых сервисов</b>
 
 Выберите сервис для настройки:`;
 
   await bot.sendMessage(chatId, message, {
-    parse_mode: 'Markdown',
+    parse_mode: 'HTML',
     reply_markup: keyboard
   });
 }
@@ -286,28 +284,62 @@ bot.onText(/\/mystocks/, async (msg) => {
       inline_keyboard: []
     };
     
-    // 123RF
-    const rf123Status = stockServices.rf123?.enabled ? '✅ Активен' : '❌ Не настроен';
-    message += `🔸 **123RF**: ${rf123Status}\n\n`;
+    // Показываем статус всех возможных сервисов
+    const services = [
+      { key: 'adobeStock', name: 'Adobe Stock', setupData: 'setup_adobeStock' },
+      { key: 'freepik', name: 'Freepik', setupData: 'setup_freepik' },
+      { key: 'pixta', name: 'Pixta', setupData: 'setup_pixta' },
+      { key: 'rf123', name: '123RF', setupData: 'setup_123rf' }
+    ];
     
-    if (stockServices.rf123?.enabled) {
-      // Если сервис привязан - показываем кнопки управления
-      message += `Сервис 123RF настроен и готов к работе.`;
+    let hasAnyService = false;
+    let unconnectedServices = [];
+    
+    services.forEach(service => {
+      const isEnabled = stockServices[service.key]?.enabled;
+      const status = isEnabled ? '✅ Настроен' : '❌ Не настроен';
+      message += `🔸 *${service.name}*: ${status}\n`;
+      
+      if (isEnabled) {
+        hasAnyService = true;
+      } else {
+        unconnectedServices.push(service);
+      }
+    });
+    
+    message += '\n';
+    
+    if (hasAnyService) {
+      // Если есть хотя бы один привязанный сервис
+      message += `Настроенные сервисы готовы к работе.`;
+      
+      // Добавляем кнопку "Привязать сток" если есть непривязанные
+      if (unconnectedServices.length > 0) {
+        keyboard.inline_keyboard.push([
+          { text: "🔗 Привязать сток", callback_data: "add_stock_service" }
+        ]);
+      }
+      
+      // Добавляем универсальные кнопки управления
       keyboard.inline_keyboard.push([
-        { text: "👁️ Посмотреть 123RF", callback_data: "view_rf123" }
+        { text: "👁️ Посмотреть", callback_data: "view_stock_menu" }
       ]);
       keyboard.inline_keyboard.push([
-        { text: "✏️ Изменить данные 123RF", callback_data: "edit_rf123" }
+        { text: "✏️ Изменить данные", callback_data: "edit_stock_menu" }
       ]);
       keyboard.inline_keyboard.push([
-        { text: "🗑️ Удалить 123RF", callback_data: "delete_rf123" }
+        { text: "🗑️ Удалить", callback_data: "delete_stock_menu" }
       ]);
     } else {
-      // Если сервис не привязан - показываем только кнопку привязки
-      message += `⚠️ *Сервис не настроен*\nДля генерации изображений необходимо привязать стоковый сервис 123RF.`;
-      keyboard.inline_keyboard.push([
-        { text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }
-      ]);
+      // Если нет ни одного привязанного сервиса
+      message += `⚠️ *Сервисы не настроены*\nДля генерации изображений необходимо привязать хотя бы один стоковый сервис.`;
+      
+      // Показываем кнопки для привязки всех сервисов
+      services.forEach(service => {
+        keyboard.inline_keyboard.push([
+          { text: `🔗 Привязать ${service.name}`, callback_data: service.setupData }
+        ]);
+      });
     }
 
     await bot.sendMessage(chatId, message, {
@@ -316,7 +348,7 @@ bot.onText(/\/mystocks/, async (msg) => {
     });
   } catch (error) {
     console.error('Error in /mystocks command:', error.message);
-    await bot.sendMessage(chatId, '❌ Ошибка загрузки информации о стоков.');
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки информации о стоках.');
   }
 });
 
@@ -421,9 +453,9 @@ bot.on('message', async (msg) => {
       } else {
         caption = `🎨 Изображение сгенерировано!\n\n`;
       }
-      caption += `📝 **Промт:** ${prompt}\n`;
-      caption += `🤖 **Модель:** ${imageData.model}\n`;
-      caption += `📐 **Размер:** 4000x4000`;
+      caption += `📝 *Промт:* ${prompt}\n`;
+      caption += `🤖 *Модель:* ${imageData.model}\n`;
+      caption += `📐 *Размер:* 4000x4000`;
       
       // Create inline keyboard with upload options
       const keyboard = getImageActionsKeyboard(imageData.id, user.id, availableServices);
@@ -519,12 +551,18 @@ bot.on('callback_query', async (callbackQuery) => {
       await showStockSetupMenu(chatId, user.id);
     } else if (data === 'configure_existing') {
       await showConfigureExistingMenu(chatId, user.id);
-    } else if (data.startsWith('view_')) {
+    } else if (data === 'view_stock_menu') {
+      await handleViewStockMenu(callbackQuery, user);
+    } else if (data.startsWith('view_') && data !== 'view_stock_menu') {
       await handleViewStock(callbackQuery, user);
-    } else if (data.startsWith('delete_')) {
-      await handleDeleteStock(callbackQuery, user);
-    } else if (data.startsWith('edit_')) {
+    } else if (data === 'edit_stock_menu') {
+      await handleEditStockMenu(callbackQuery, user);
+    } else if (data.startsWith('edit_') && data !== 'edit_stock_menu') {
       await handleEditStock(callbackQuery, user);
+    } else if (data === 'delete_stock_menu') {
+      await handleDeleteStockMenu(callbackQuery, user);
+    } else if (data.startsWith('delete_') && data !== 'delete_stock_menu') {
+      await handleDeleteStock(callbackQuery, user);
     } else if (data.startsWith('confirm_delete_')) {
       await handleConfirmDelete(callbackQuery, user);
     } else if (data === 'cancel_delete') {
@@ -543,6 +581,14 @@ bot.on('callback_query', async (callbackQuery) => {
       await handleCancelSetup(callbackQuery, user);
     } else if (data.startsWith('upload_')) {
       await handleImageUpload(callbackQuery, user);
+    } else if (data === 'add_stock_service') {
+      await handleAddStockService(callbackQuery, user);
+    } else if (data === 'view_stock_menu') {
+      await handleViewStockMenu(callbackQuery, user);
+    } else if (data === 'edit_stock_menu') {
+      await handleEditStockMenu(callbackQuery, user);
+    } else if (data === 'delete_stock_menu') {
+      await handleDeleteStockMenu(callbackQuery, user);
     }
     
   } catch (error) {
@@ -710,15 +756,15 @@ async function handleSetupStep(msg, session) {
           session.step = 'confirm';
           
           // Show confirmation for Shutterstock
-          const shutterstockConfirmMessage = `📋 *Проверьте настройки ${serviceName}:*
+          const shutterstockConfirmMessage = `📋 <b>Проверьте настройки ${serviceName}:</b>
 
-👤 **Логин:** ${session.data.username}
-🔐 **Пароль:** ${'*'.repeat(session.data.password.length)}
-🔑 **API ключ:** ${session.data.apiKey.substring(0, 8)}...
+👤 <b>Логин:</b> ${session.data.username}
+🔐 <b>Пароль:</b> ${'*'.repeat(session.data.password.length)}
+🔑 <b>API ключ:</b> ${session.data.apiKey.substring(0, 8)}...
 
 Все верно? Отправьте "да" для сохранения или "нет" для отмены.`;
           
-          await bot.sendMessage(chatId, shutterstockConfirmMessage, { parse_mode: 'Markdown' });
+          await bot.sendMessage(chatId, shutterstockConfirmMessage, { parse_mode: 'HTML' });
         }
         break;
         
@@ -731,16 +777,16 @@ async function handleSetupStep(msg, session) {
         session.step = 'confirm';
         
         // Show confirmation for Adobe Stock
-        const adobeConfirmMessage = `📋 *Проверьте настройки ${serviceName}:*
+        const adobeConfirmMessage = `📋 <b>Проверьте настройки ${serviceName}:</b>
 
-👤 **Логин:** ${session.data.username}
-🔐 **Пароль:** ${'*'.repeat(session.data.password.length)}
-🔑 **API ключ:** ${session.data.apiKey.substring(0, 8)}...
-🔐 **API секрет:** ${session.data.apiSecret.substring(0, 8)}...
+👤 <b>Логин:</b> ${session.data.username}
+🔐 <b>Пароль:</b> ${'*'.repeat(session.data.password.length)}
+🔑 <b>API ключ:</b> ${session.data.apiKey.substring(0, 8)}...
+🔐 <b>API секрет:</b> ${session.data.apiSecret.substring(0, 8)}...
 
 Все верно? Отправьте "да" для сохранения или "нет" для отмены.`;
         
-        await bot.sendMessage(chatId, adobeConfirmMessage, { parse_mode: 'Markdown' });
+        await bot.sendMessage(chatId, adobeConfirmMessage, { parse_mode: 'HTML' });
         break;
         
       case 'confirm':
@@ -1020,7 +1066,7 @@ async function showConfigureExistingMenu(chatId, userId) {
     
     // Add edit buttons for active services
     if (stockServices.rf123?.enabled) {
-      message += `✅ **123RF** - активен\n`;
+      message += `✅ *123RF* - активен\n`;
       keyboard.inline_keyboard.push([{ text: "✏️ Редактировать 123RF", callback_data: "edit_rf123" }]);
     }
     
@@ -1054,42 +1100,59 @@ async function showConfigureExistingMenu(chatId, userId) {
  */
 async function handleViewStock(callbackQuery, user) {
   const chatId = callbackQuery.message.chat.id;
-  const service = callbackQuery.data.split('_')[1]; // view_rf123 -> rf123
+  const data = callbackQuery.data;
+  
+  console.log('handleViewStock called with data:', data);
+  
+  // Handle both old format (view_rf123) and new format (view_adobeStock, view_freepik, etc.)
+  let service;
+  if (data.startsWith('view_')) {
+    const parts = data.split('_');
+    service = parts[1]; // view_rf123 -> rf123 or view_adobeStock -> adobeStock
+  }
+  
+  console.log('Extracted service:', service);
   
   try {
     const stockServices = await backendApi.getStockServices(user.id);
+    console.log('Available stock services:', Object.keys(stockServices));
+    
     const serviceData = stockServices[service];
+    console.log('Service data for', service, ':', serviceData ? 'found' : 'not found');
     
     if (!serviceData || !serviceData.enabled) {
-      return bot.sendMessage(chatId, '❌ Сервис не найден или не активен.');
+      console.log('Service not found or not enabled:', service);
+      return bot.sendMessage(chatId, `❌ Сервис не найден или не активен. (service: ${service})`);
     }
     
     const serviceNames = {
       'rf123': '123RF',
       'shutterstock': 'Shutterstock',
-      'adobeStock': 'Adobe Stock'
+      'adobeStock': 'Adobe Stock',
+      'freepik': 'Freepik',
+      'pixta': 'Pixta'
     };
     
     const serviceName = serviceNames[service];
     
-    let message = `👁️ *Информация о ${serviceName}*\n\n`;
-    message += `📊 **Статус:** ✅ Активен\n`;
-    message += `👤 **Логин:** ${serviceData.credentials.username}\n`;
-    message += `🔐 **Пароль:** ${'*'.repeat((serviceData.credentials.password || '').length)}\n`;
+    let message = `👁️ <b>Информация о ${serviceName}</b>\n\n`;
+    message += `📊 <b>Статус:</b> ✅ Активен\n`;
+    message += `👤 <b>Логин:</b> ${serviceData.credentials.username}\n`;
+    message += `🔐 <b>Пароль:</b> ${'*'.repeat((serviceData.credentials.password || '').length)}\n`;
     
-    if (service === '123rf') {
-      message += `🌐 **FTP хост:** ${serviceData.credentials.ftpHost}\n`;
-      message += `🔌 **FTP порт:** ${serviceData.credentials.ftpPort}\n`;
-      message += `📁 **Путь:** ${serviceData.credentials.remotePath}\n`;
+    if (service === 'rf123') {
+      message += `🌐 <b>FTP хост:</b> ${serviceData.credentials.ftpHost}\n`;
+      message += `🔌 <b>FTP порт:</b> ${serviceData.credentials.ftpPort}\n`;
+      message += `📁 <b>Путь:</b> ${serviceData.credentials.remotePath}\n`;
     } else if (service === 'shutterstock') {
-      message += `🔑 **API ключ:** ${serviceData.credentials.apiKey.substring(0, 8)}...\n`;
+      message += `🔑 <b>API ключ:</b> ${serviceData.credentials.apiKey.substring(0, 8)}...\n`;
     } else if (service === 'adobeStock') {
-      message += `🔑 **API ключ:** ${serviceData.credentials.apiKey.substring(0, 8)}...\n`;
-      message += `🔐 **API секрет:** ${serviceData.credentials.secret.substring(0, 8)}...\n`;
+      message += `🔑 <b>API ключ:</b> ${serviceData.credentials.apiKey.substring(0, 8)}...\n`;
+      message += `🔐 <b>API секрет:</b> ${serviceData.credentials.secret.substring(0, 8)}...\n`;
     }
     
     
-    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, message, { parse_mode: 'HTML' });
     
   } catch (error) {
     console.error('Error viewing stock details:', error.message);
@@ -1102,15 +1165,29 @@ async function handleViewStock(callbackQuery, user) {
  */
 async function handleDeleteStock(callbackQuery, user) {
   const chatId = callbackQuery.message.chat.id;
-  const service = callbackQuery.data.split('_')[1]; // delete_rf123 -> rf123
+  const data = callbackQuery.data;
+  
+  console.log('handleDeleteStock called with data:', data);
+  
+  // Handle both old format (delete_rf123) and new format (delete_adobeStock, delete_freepik, etc.)
+  let service;
+  if (data.startsWith('delete_')) {
+    const parts = data.split('_');
+    service = parts[1]; // delete_rf123 -> rf123 or delete_adobeStock -> adobeStock
+  }
+  
+  console.log('Extracted service for delete:', service);
   
   const serviceNames = {
     'rf123': '123RF',
     'shutterstock': 'Shutterstock',
-    'adobeStock': 'Adobe Stock'
+    'adobeStock': 'Adobe Stock',
+    'freepik': 'Freepik',
+    'pixta': 'Pixta'
   };
   
   const serviceName = serviceNames[service];
+  console.log('Service name for delete:', serviceName);
   
   try {
     // Show confirmation dialog
@@ -1142,19 +1219,30 @@ async function handleDeleteStock(callbackQuery, user) {
 async function handleEditStock(callbackQuery, user) {
   const chatId = callbackQuery.message.chat.id;
   const telegramUserId = callbackQuery.from.id;
-  const service = callbackQuery.data.split('_')[1]; // edit_rf123 -> rf123
+  const data = callbackQuery.data;
+  
+  // Handle both old format (edit_rf123) and new format (edit_adobeStock, edit_freepik, etc.)
+  let service;
+  if (data.startsWith('edit_')) {
+    const parts = data.split('_');
+    service = parts[1]; // edit_rf123 -> rf123 or edit_adobeStock -> adobeStock
+  }
   
   const serviceNames = {
     'rf123': '123RF',
     'shutterstock': 'Shutterstock',
-    'adobeStock': 'Adobe Stock'
+    'adobeStock': 'Adobe Stock',
+    'freepik': 'Freepik',
+    'pixta': 'Pixta'
   };
   
   // Map internal service names to external API names for session
   const serviceApiMapping = {
     'rf123': '123rf',
     'shutterstock': 'shutterstock',
-    'adobeStock': 'adobeStock'
+    'adobeStock': 'adobeStock',
+    'freepik': 'freepik',
+    'pixta': 'pixta'
   };
   
   const serviceName = serviceNames[service];
@@ -1210,13 +1298,17 @@ async function handleConfirmDelete(callbackQuery, user) {
   const serviceApiMapping = {
     'rf123': '123rf',
     'shutterstock': 'shutterstock',
-    'adobeStock': 'adobeStock'
+    'adobeStock': 'adobeStock',
+    'freepik': 'freepik',
+    'pixta': 'pixta'
   };
   
   const serviceNames = {
     'rf123': '123RF',
     'shutterstock': 'Shutterstock',
-    'adobeStock': 'Adobe Stock'
+    'adobeStock': 'Adobe Stock',
+    'freepik': 'Freepik',
+    'pixta': 'Pixta'
   };
   
   const serviceName = serviceNames[service];
@@ -1281,7 +1373,7 @@ async function handleConfirmCancel(callbackQuery, user) {
     
     // 123RF
     const rf123Status = stockServices.rf123?.enabled ? '✅ Активен' : '❌ Не настроен';
-    message += `🔸 **123RF**: ${rf123Status}\n\n`;
+    message += `🔸 *123RF*: ${rf123Status}\n\n`;
     
     if (stockServices.rf123?.enabled) {
       // Если сервис привязан - показываем кнопки управления
@@ -1490,7 +1582,7 @@ async function handleCancelSetup(callbackQuery, user) {
     
     // 123RF
     const rf123Status = stockServices.rf123?.enabled ? '✅ Активен' : '❌ Не настроен';
-    message += `🔸 **123RF**: ${rf123Status}\n\n`;
+    message += `🔸 *123RF*: ${rf123Status}\n\n`;
     
     if (stockServices.rf123?.enabled) {
       // Если сервис привязан - показываем кнопки управления
@@ -1519,6 +1611,182 @@ async function handleCancelSetup(callbackQuery, user) {
   } catch (error) {
     console.error('Error in handleCancelSetup:', error.message);
     await bot.sendMessage(chatId, '❌ Настройка отменена.');
+  }
+}
+
+/**
+ * Handle add stock service menu
+ */
+async function handleAddStockService(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  
+  try {
+    const stockServices = await backendApi.getStockServices(user.id);
+    
+    const services = [
+      { key: 'adobeStock', name: 'Adobe Stock', setupData: 'setup_adobeStock' },
+      { key: 'freepik', name: 'Freepik', setupData: 'setup_freepik' },
+      { key: 'pixta', name: 'Pixta', setupData: 'setup_pixta' },
+      { key: 'rf123', name: '123RF', setupData: 'setup_123rf' }
+    ];
+    
+    const keyboard = { inline_keyboard: [] };
+    let message = `🔗 *Привязать стоковый сервис*\n\nВыберите сервис для настройки:\n\n`;
+    
+    let hasUnconnected = false;
+    services.forEach(service => {
+      const isEnabled = stockServices[service.key]?.enabled;
+      if (!isEnabled) {
+        hasUnconnected = true;
+        keyboard.inline_keyboard.push([
+          { text: `🔗 Привязать ${service.name}`, callback_data: service.setupData }
+        ]);
+      }
+    });
+    
+    if (!hasUnconnected) {
+      message = `✅ *Все сервисы уже настроены*\n\nВсе доступные стоковые сервисы уже привязаны к вашему аккаунту.`;
+    }
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error in handleAddStockService:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки списка сервисов.');
+  }
+}
+
+/**
+ * Handle view stock menu
+ */
+async function handleViewStockMenu(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  
+  try {
+    const stockServices = await backendApi.getStockServices(user.id);
+    
+    const services = [
+      { key: 'adobeStock', name: 'Adobe Stock', viewData: 'view_adobeStock' },
+      { key: 'freepik', name: 'Freepik', viewData: 'view_freepik' },
+      { key: 'pixta', name: 'Pixta', viewData: 'view_pixta' },
+      { key: 'rf123', name: '123RF', viewData: 'view_rf123' }
+    ];
+    
+    const keyboard = { inline_keyboard: [] };
+    let message = `👁️ *Посмотреть настройки сервиса*\n\nВыберите сервис для просмотра:\n\n`;
+    
+    let hasConnected = false;
+    services.forEach(service => {
+      const isEnabled = stockServices[service.key]?.enabled;
+      if (isEnabled) {
+        hasConnected = true;
+        keyboard.inline_keyboard.push([
+          { text: `👁️ ${service.name}`, callback_data: service.viewData }
+        ]);
+      }
+    });
+    
+    if (!hasConnected) {
+      message = `❌ *Нет настроенных сервисов*\n\nСначала привяжите хотя бы один стоковый сервис.`;
+    }
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error in handleViewStockMenu:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки списка сервисов.');
+  }
+}
+
+/**
+ * Handle edit stock menu
+ */
+async function handleEditStockMenu(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  
+  try {
+    const stockServices = await backendApi.getStockServices(user.id);
+    
+    const services = [
+      { key: 'adobeStock', name: 'Adobe Stock', editData: 'edit_adobeStock' },
+      { key: 'freepik', name: 'Freepik', editData: 'edit_freepik' },
+      { key: 'pixta', name: 'Pixta', editData: 'edit_pixta' },
+      { key: 'rf123', name: '123RF', editData: 'edit_rf123' }
+    ];
+    
+    const keyboard = { inline_keyboard: [] };
+    let message = `✏️ *Изменить данные сервиса*\n\nВыберите сервис для редактирования:\n\n`;
+    
+    let hasConnected = false;
+    services.forEach(service => {
+      const isEnabled = stockServices[service.key]?.enabled;
+      if (isEnabled) {
+        hasConnected = true;
+        keyboard.inline_keyboard.push([
+          { text: `✏️ ${service.name}`, callback_data: service.editData }
+        ]);
+      }
+    });
+    
+    if (!hasConnected) {
+      message = `❌ *Нет настроенных сервисов*\n\nСначала привяжите хотя бы один стоковый сервис.`;
+    }
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error in handleEditStockMenu:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки списка сервисов.');
+  }
+}
+
+/**
+ * Handle delete stock menu
+ */
+async function handleDeleteStockMenu(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  
+  try {
+    const stockServices = await backendApi.getStockServices(user.id);
+    
+    const services = [
+      { key: 'adobeStock', name: 'Adobe Stock', deleteData: 'delete_adobeStock' },
+      { key: 'freepik', name: 'Freepik', deleteData: 'delete_freepik' },
+      { key: 'pixta', name: 'Pixta', deleteData: 'delete_pixta' },
+      { key: 'rf123', name: '123RF', deleteData: 'delete_rf123' }
+    ];
+    
+    const keyboard = { inline_keyboard: [] };
+    let message = `🗑️ *Удалить настройки сервиса*\n\nВыберите сервис для удаления:\n\n`;
+    
+    let hasConnected = false;
+    services.forEach(service => {
+      const isEnabled = stockServices[service.key]?.enabled;
+      if (isEnabled) {
+        hasConnected = true;
+        keyboard.inline_keyboard.push([
+          { text: `🗑️ ${service.name}`, callback_data: service.deleteData }
+        ]);
+      }
+    });
+    
+    if (!hasConnected) {
+      message = `❌ *Нет настроенных сервисов*\n\nСначала привяжите хотя бы один стоковый сервис.`;
+    }
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error in handleDeleteStockMenu:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки списка сервисов.');
   }
 }
 
