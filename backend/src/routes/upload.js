@@ -122,16 +122,6 @@ router.post('/123rf',
   asyncHandler(uploadController.uploadTo123RF)
 );
 
-/**
- * @route   POST /api/upload/shutterstock
- * @desc    Upload image to Shutterstock
- * @access  Public
- */
-router.post('/shutterstock', 
-  uploadLimiter,
-  validateUploadRequest,
-  asyncHandler(uploadController.uploadToShutterstock)
-);
 
 /**
  * @route   POST /api/upload/adobe-stock
@@ -151,7 +141,7 @@ router.post('/adobe-stock',
  */
 router.post('/:service', [
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service'),
   uploadLimiter,
   ...validateGenericUpload
@@ -164,7 +154,7 @@ router.post('/:service', [
  */
 router.post('/batch/:service', [
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service'),
   uploadLimiter,
   ...validateBatchUpload
@@ -194,7 +184,7 @@ router.post('/retry/:imageId/:service', [
     .isMongoId()
     .withMessage('Invalid image ID format'),
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service'),
   ...validateRetryRequest
 ], asyncHandler(uploadController.retryUpload));
@@ -206,7 +196,7 @@ router.post('/retry/:imageId/:service', [
  */
 router.post('/test/:service', [
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service'),
   ...validateTestConnection
 ], asyncHandler(uploadController.testServiceConnection));
@@ -222,7 +212,7 @@ router.get('/stats/:userId', [
     .withMessage('Invalid user ID format'),
   query('service')
     .optional()
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service'),
   query('timeframe')
     .optional()
@@ -240,7 +230,7 @@ router.delete('/:imageId/:service', [
     .isMongoId()
     .withMessage('Invalid image ID format'),
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service'),
   ...validateCancelUpload
 ], asyncHandler(uploadController.cancelUpload));

@@ -36,7 +36,7 @@ router.get('/', (req, res) => {
     features: [
       'AI image generation using OpenAI DALL-E',
       'Multi-platform user management (Telegram, Web, Mobile)',
-      'Stock service integrations (123RF, Shutterstock, Adobe Stock)',
+      'Stock service integrations (123RF, Adobe Stock, Freepik, Pixta)',
       'Image metadata management',
       'Upload tracking and retry mechanisms',
       'User preferences and subscription management'
@@ -58,7 +58,6 @@ router.get('/', (req, res) => {
       },
       upload: {
         to123RF: 'POST /api/upload/123rf',
-        toShutterstock: 'POST /api/upload/shutterstock',
         toAdobeStock: 'POST /api/upload/adobe-stock',
         generic: 'POST /api/upload/:service',
         batch: 'POST /api/upload/batch/:service',
@@ -86,8 +85,9 @@ router.get('/', (req, res) => {
     },
     supportedServices: [
       '123rf',
-      'shutterstock',
-      'adobeStock'
+      'adobeStock',
+      'freepik',
+      'pixta'
     ],
     supportedExternalSystems: [
       'telegram',

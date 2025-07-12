@@ -244,7 +244,7 @@ router.post('/:imageId/upload/:service', [
     .isMongoId()
     .withMessage('Invalid image ID format'),
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service'),
   ...validateUploadSettings
 ], asyncHandler(imageController.uploadToStockService));
@@ -273,7 +273,7 @@ router.post('/:imageId/retry/:service', [
     .isMongoId()
     .withMessage('Invalid image ID format'),
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service'),
   body('userId')
     .isString()

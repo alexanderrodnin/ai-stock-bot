@@ -1,6 +1,6 @@
 /**
  * Stock Services Upload Service
- * Handles uploads to various stock photo services (123RF, Shutterstock, Adobe Stock)
+ * Handles uploads to various stock photo services (123RF, Adobe Stock, Freepik, Pixta)
  */
 
 const fs = require('fs').promises;
@@ -15,12 +15,13 @@ const ftpService = require('./ftpService');
 
 class StockUploadService {
   constructor() {
-    this.supportedServices = ['123rf', 'shutterstock', 'adobeStock'];
+    this.supportedServices = ['123rf', 'adobeStock', 'freepik', 'pixta'];
     // Map service names to user model field names
     this.serviceMapping = {
       '123rf': 'rf123',
-      'shutterstock': 'shutterstock',
-      'adobeStock': 'adobeStock'
+      'adobeStock': 'adobeStock',
+      'freepik': 'freepik',
+      'pixta': 'pixta'
     };
   }
 
@@ -75,11 +76,14 @@ class StockUploadService {
         case '123rf':
           uploadResult = await this.uploadTo123RF(image, serviceConfig, finalSettings);
           break;
-        case 'shutterstock':
-          uploadResult = await this.uploadToShutterstock(image, serviceConfig, finalSettings);
-          break;
         case 'adobeStock':
           uploadResult = await this.uploadToAdobeStock(image, serviceConfig, finalSettings);
+          break;
+        case 'freepik':
+          uploadResult = await this.uploadToFreepik(image, serviceConfig, finalSettings);
+          break;
+        case 'pixta':
+          uploadResult = await this.uploadToPixta(image, serviceConfig, finalSettings);
           break;
         default:
           throw new Error(`Upload handler not implemented for ${service}`);
@@ -268,51 +272,180 @@ class StockUploadService {
   }
 
   /**
-   * Upload to Shutterstock (placeholder for future implementation)
-   * @param {Object} image - Image document
-   * @param {Object} serviceConfig - Service configuration
-   * @param {Object} settings - Upload settings
-   * @returns {Promise<Object>} Upload result
-   */
-  async uploadToShutterstock(image, serviceConfig, settings) {
-    // This is a placeholder for future Shutterstock API integration
-    logger.info('Shutterstock upload requested', {
-      imageId: image.id,
-      note: 'Shutterstock API integration not yet implemented'
-    });
-
-    // Simulate upload for now
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    return {
-      externalId: `shutterstock_${Date.now()}`,
-      uploadUrl: 'https://submit.shutterstock.com/...',
-      status: 'pending_review'
-    };
-  }
-
-  /**
-   * Upload to Adobe Stock (placeholder for future implementation)
+   * Upload to Adobe Stock via FTP
    * @param {Object} image - Image document
    * @param {Object} serviceConfig - Service configuration
    * @param {Object} settings - Upload settings
    * @returns {Promise<Object>} Upload result
    */
   async uploadToAdobeStock(image, serviceConfig, settings) {
-    // This is a placeholder for future Adobe Stock API integration
-    logger.info('Adobe Stock upload requested', {
-      imageId: image.id,
-      note: 'Adobe Stock API integration not yet implemented'
-    });
+    try {
+      logger.info('Starting Adobe Stock FTP upload', {
+        imageId: image.id,
+        filename: image.file.filename
+      });
 
-    // Simulate upload for now
-    await new Promise(resolve => setTimeout(resolve, 1000));
+      // Enhanced file verification
+      await this.verifyFileReadiness(image);
 
-    return {
-      externalId: `adobe_${Date.now()}`,
-      uploadUrl: 'https://contributor.stock.adobe.com/...',
-      status: 'pending_review'
-    };
+      // Prepare FTP credentials
+      const ftpCredentials = {
+        host: serviceConfig.credentials.ftpHost,
+        port: serviceConfig.credentials.ftpPort || 21,
+        user: serviceConfig.credentials.username,
+        password: serviceConfig.credentials.password,
+        secure: false,
+        remotePath: serviceConfig.credentials.remotePath || '/uploads'
+      };
+
+      // Use FTP service for upload
+      const uploadResult = await ftpService.uploadImageWithCredentials(image.file.path, {
+        title: settings.title,
+        description: settings.description,
+        keywords: settings.keywords
+      }, ftpCredentials);
+
+      logger.info('Adobe Stock upload completed successfully', {
+        imageId: image.id,
+        remoteFileName: uploadResult.remoteFile
+      });
+
+      const remotePath = serviceConfig.credentials.remotePath || '/uploads';
+      
+      return {
+        externalId: uploadResult.remoteFile,
+        uploadUrl: `ftp://${serviceConfig.credentials.ftpHost}${remotePath}/${uploadResult.remoteFile}`,
+        remoteFilePath: `${remotePath}/${uploadResult.remoteFile}`,
+        remoteFileName: uploadResult.remoteFile,
+        uploadTime: uploadResult.uploadTime,
+        fileSize: uploadResult.fileSize
+      };
+
+    } catch (error) {
+      logger.error('Adobe Stock upload failed', {
+        imageId: image.id,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Upload to Freepik via FTP
+   * @param {Object} image - Image document
+   * @param {Object} serviceConfig - Service configuration
+   * @param {Object} settings - Upload settings
+   * @returns {Promise<Object>} Upload result
+   */
+  async uploadToFreepik(image, serviceConfig, settings) {
+    try {
+      logger.info('Starting Freepik FTP upload', {
+        imageId: image.id,
+        filename: image.file.filename
+      });
+
+      // Enhanced file verification
+      await this.verifyFileReadiness(image);
+
+      // Prepare FTP credentials
+      const ftpCredentials = {
+        host: serviceConfig.credentials.ftpHost,
+        port: serviceConfig.credentials.ftpPort || 21,
+        user: serviceConfig.credentials.username,
+        password: serviceConfig.credentials.password,
+        secure: false,
+        remotePath: serviceConfig.credentials.remotePath || '/uploads'
+      };
+
+      // Use FTP service for upload
+      const uploadResult = await ftpService.uploadImageWithCredentials(image.file.path, {
+        title: settings.title,
+        description: settings.description,
+        keywords: settings.keywords
+      }, ftpCredentials);
+
+      logger.info('Freepik upload completed successfully', {
+        imageId: image.id,
+        remoteFileName: uploadResult.remoteFile
+      });
+
+      const remotePath = serviceConfig.credentials.remotePath || '/uploads';
+      
+      return {
+        externalId: uploadResult.remoteFile,
+        uploadUrl: `ftp://${serviceConfig.credentials.ftpHost}${remotePath}/${uploadResult.remoteFile}`,
+        remoteFilePath: `${remotePath}/${uploadResult.remoteFile}`,
+        remoteFileName: uploadResult.remoteFile,
+        uploadTime: uploadResult.uploadTime,
+        fileSize: uploadResult.fileSize
+      };
+
+    } catch (error) {
+      logger.error('Freepik upload failed', {
+        imageId: image.id,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Upload to Pixta via FTP
+   * @param {Object} image - Image document
+   * @param {Object} serviceConfig - Service configuration
+   * @param {Object} settings - Upload settings
+   * @returns {Promise<Object>} Upload result
+   */
+  async uploadToPixta(image, serviceConfig, settings) {
+    try {
+      logger.info('Starting Pixta FTP upload', {
+        imageId: image.id,
+        filename: image.file.filename
+      });
+
+      // Enhanced file verification
+      await this.verifyFileReadiness(image);
+
+      // Prepare FTP credentials
+      const ftpCredentials = {
+        host: serviceConfig.credentials.ftpHost,
+        port: serviceConfig.credentials.ftpPort || 21,
+        user: serviceConfig.credentials.username,
+        password: serviceConfig.credentials.password,
+        secure: false,
+        remotePath: serviceConfig.credentials.remotePath || '/uploads'
+      };
+
+      // Use FTP service for upload
+      const uploadResult = await ftpService.uploadImageWithCredentials(image.file.path, {
+        title: settings.title,
+        description: settings.description,
+        keywords: settings.keywords
+      }, ftpCredentials);
+
+      logger.info('Pixta upload completed successfully', {
+        imageId: image.id,
+        remoteFileName: uploadResult.remoteFile
+      });
+
+      const remotePath = serviceConfig.credentials.remotePath || '/uploads';
+      
+      return {
+        externalId: uploadResult.remoteFile,
+        uploadUrl: `ftp://${serviceConfig.credentials.ftpHost}${remotePath}/${uploadResult.remoteFile}`,
+        remoteFilePath: `${remotePath}/${uploadResult.remoteFile}`,
+        remoteFileName: uploadResult.remoteFile,
+        uploadTime: uploadResult.uploadTime,
+        fileSize: uploadResult.fileSize
+      };
+
+    } catch (error) {
+      logger.error('Pixta upload failed', {
+        imageId: image.id,
+        error: error.message
+      });
+      throw error;
+    }
   }
 
   /**
@@ -393,11 +526,14 @@ class StockUploadService {
         case '123rf':
           testResult = await this.test123RFConnection(serviceConfig);
           break;
-        case 'shutterstock':
-          testResult = await this.testShutterstockConnection(serviceConfig);
-          break;
         case 'adobeStock':
           testResult = await this.testAdobeStockConnection(serviceConfig);
+          break;
+        case 'freepik':
+          testResult = await this.testFreepikConnection(serviceConfig);
+          break;
+        case 'pixta':
+          testResult = await this.testPixtaConnection(serviceConfig);
           break;
         default:
           throw new Error(`Connection test not implemented for ${service}`);
@@ -471,29 +607,117 @@ class StockUploadService {
   }
 
   /**
-   * Test Shutterstock connection (placeholder)
-   * @param {Object} serviceConfig - Service configuration
-   * @returns {Promise<Object>} Test result
-   */
-  async testShutterstockConnection(serviceConfig) {
-    // Placeholder for Shutterstock API connection test
-    return {
-      connected: true,
-      note: 'Shutterstock API integration not yet implemented'
-    };
-  }
-
-  /**
-   * Test Adobe Stock connection (placeholder)
+   * Test Adobe Stock FTP connection
    * @param {Object} serviceConfig - Service configuration
    * @returns {Promise<Object>} Test result
    */
   async testAdobeStockConnection(serviceConfig) {
-    // Placeholder for Adobe Stock API connection test
-    return {
-      connected: true,
-      note: 'Adobe Stock API integration not yet implemented'
-    };
+    try {
+      const ftpCredentials = {
+        host: serviceConfig.credentials.ftpHost,
+        port: serviceConfig.credentials.ftpPort || 21,
+        user: serviceConfig.credentials.username,
+        password: serviceConfig.credentials.password,
+        secure: false,
+        remotePath: serviceConfig.credentials.remotePath || '/uploads'
+      };
+
+      const testResult = await ftpService.testConnection(ftpCredentials);
+      
+      if (testResult.success) {
+        return {
+          connected: true,
+          host: serviceConfig.credentials.ftpHost,
+          remotePath: serviceConfig.credentials.remotePath || '/uploads',
+          directoryCount: testResult.directoryCount,
+          message: 'Adobe Stock FTP connection test successful'
+        };
+      } else {
+        throw new Error(testResult.error || 'FTP connection test failed');
+      }
+    } catch (error) {
+      logger.error('Adobe Stock FTP connection test failed', {
+        host: serviceConfig.credentials.ftpHost,
+        error: error.message
+      });
+      throw new Error(`Adobe Stock FTP connection failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Test Freepik FTP connection
+   * @param {Object} serviceConfig - Service configuration
+   * @returns {Promise<Object>} Test result
+   */
+  async testFreepikConnection(serviceConfig) {
+    try {
+      const ftpCredentials = {
+        host: serviceConfig.credentials.ftpHost,
+        port: serviceConfig.credentials.ftpPort || 21,
+        user: serviceConfig.credentials.username,
+        password: serviceConfig.credentials.password,
+        secure: false,
+        remotePath: serviceConfig.credentials.remotePath || '/uploads'
+      };
+
+      const testResult = await ftpService.testConnection(ftpCredentials);
+      
+      if (testResult.success) {
+        return {
+          connected: true,
+          host: serviceConfig.credentials.ftpHost,
+          remotePath: serviceConfig.credentials.remotePath || '/uploads',
+          directoryCount: testResult.directoryCount,
+          message: 'Freepik FTP connection test successful'
+        };
+      } else {
+        throw new Error(testResult.error || 'FTP connection test failed');
+      }
+    } catch (error) {
+      logger.error('Freepik FTP connection test failed', {
+        host: serviceConfig.credentials.ftpHost,
+        error: error.message
+      });
+      throw new Error(`Freepik FTP connection failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Test Pixta FTP connection
+   * @param {Object} serviceConfig - Service configuration
+   * @returns {Promise<Object>} Test result
+   */
+  async testPixtaConnection(serviceConfig) {
+    try {
+      const ftpCredentials = {
+        host: serviceConfig.credentials.ftpHost,
+        port: serviceConfig.credentials.ftpPort || 21,
+        user: serviceConfig.credentials.username,
+        password: serviceConfig.credentials.password,
+        secure: false,
+        remotePath: serviceConfig.credentials.remotePath || '/uploads'
+      };
+
+      const testResult = await ftpService.testConnection(ftpCredentials);
+      
+      if (testResult.success) {
+        return {
+          connected: true,
+          host: serviceConfig.credentials.ftpHost,
+          remotePath: serviceConfig.credentials.remotePath || '/uploads',
+          directoryCount: testResult.directoryCount,
+          message: 'Pixta FTP connection test successful'
+        };
+      } else {
+        throw new Error(testResult.error || 'FTP connection test failed');
+      }
+    } catch (error) {
+      logger.error('Pixta FTP connection test failed', {
+        host: serviceConfig.credentials.ftpHost,
+        error: error.message
+      });
+      throw new Error(`Pixta FTP connection failed: ${error.message}`);
+    }
   }
 
   /**

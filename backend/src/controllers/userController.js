@@ -425,8 +425,9 @@ class UserController {
     // Map external service names to internal names
     const serviceMapping = {
       '123rf': 'rf123',
-      'shutterstock': 'shutterstock',
-      'adobeStock': 'adobeStock'
+      'adobeStock': 'adobeStock',
+      'freepik': 'freepik',
+      'pixta': 'pixta'
     };
 
     const internalServiceName = serviceMapping[service];
@@ -483,11 +484,8 @@ class UserController {
       if (credentials) {
         Object.keys(credentials).forEach(key => {
           if (key === 'password' && credentials[key]) {
-            // Encrypt password
+            // Encrypt password - all services use FTP authentication
             user.setStockServicePassword(internalServiceName, credentials[key]);
-          } else if (key === 'secret' && credentials[key]) {
-            // Encrypt secret
-            user.setStockServiceSecret(internalServiceName, credentials[key]);
           } else if (credentials[key] !== undefined) {
             // Regular credential field
             user.stockServices[internalServiceName].credentials[key] = credentials[key];
@@ -578,8 +576,9 @@ class UserController {
     // Map external service names to internal names
     const serviceMapping = {
       '123rf': 'rf123',
-      'shutterstock': 'shutterstock',
-      'adobeStock': 'adobeStock'
+      'adobeStock': 'adobeStock',
+      'freepik': 'freepik',
+      'pixta': 'pixta'
     };
 
     const internalServiceName = serviceMapping[service];

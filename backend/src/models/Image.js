@@ -180,7 +180,7 @@ const imageSchema = new mongoose.Schema({
     service: {
       type: String,
       required: true,
-      enum: ['123rf', 'shutterstock', 'adobeStock', 'other']
+      enum: ['123rf', 'adobeStock', 'freepik', 'pixta', 'other']
     },
 
     // Upload status

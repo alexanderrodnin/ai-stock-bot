@@ -166,53 +166,34 @@ const userSchema = new mongoose.Schema({
         }
       }
     },
-    
-    // Shutterstock settings (for future expansion)
-    shutterstock: {
-      enabled: {
-        type: Boolean,
-        default: false
-      },
-      credentials: {
-        apiKey: {
-          type: String,
-          trim: true
-        },
-        // Encrypted secret
-        secretHash: {
-          type: String
-        }
-      },
-      settings: {
-        autoUpload: {
-          type: Boolean,
-          default: false
-        },
-        defaultCategory: {
-          type: String,
-          trim: true
-        },
-        defaultKeywords: {
-          type: [String],
-          default: []
-        }
-      }
-    },
 
-    // Adobe Stock settings (for future expansion)
+    // Adobe Stock settings
     adobeStock: {
       enabled: {
         type: Boolean,
         default: false
       },
       credentials: {
-        apiKey: {
+        username: {
           type: String,
           trim: true
         },
-        // Encrypted secret
-        secretHash: {
+        // Encrypted password
+        passwordHash: {
           type: String
+        },
+        ftpHost: {
+          type: String,
+          trim: true
+        },
+        ftpPort: {
+          type: Number,
+          default: 21
+        },
+        remotePath: {
+          type: String,
+          default: '/uploads',
+          trim: true
         }
       },
       settings: {
@@ -227,6 +208,123 @@ const userSchema = new mongoose.Schema({
         defaultKeywords: {
           type: [String],
           default: []
+        },
+        defaultDescription: {
+          type: String,
+          trim: true
+        },
+        pricing: {
+          type: String,
+          enum: ['standard', 'premium', 'exclusive'],
+          default: 'standard'
+        }
+      }
+    },
+
+    // Freepik settings
+    freepik: {
+      enabled: {
+        type: Boolean,
+        default: false
+      },
+      credentials: {
+        username: {
+          type: String,
+          trim: true
+        },
+        // Encrypted password
+        passwordHash: {
+          type: String
+        },
+        ftpHost: {
+          type: String,
+          trim: true
+        },
+        ftpPort: {
+          type: Number,
+          default: 21
+        },
+        remotePath: {
+          type: String,
+          default: '/uploads',
+          trim: true
+        }
+      },
+      settings: {
+        autoUpload: {
+          type: Boolean,
+          default: false
+        },
+        defaultCategory: {
+          type: String,
+          trim: true
+        },
+        defaultKeywords: {
+          type: [String],
+          default: []
+        },
+        defaultDescription: {
+          type: String,
+          trim: true
+        },
+        pricing: {
+          type: String,
+          enum: ['standard', 'premium', 'exclusive'],
+          default: 'standard'
+        }
+      }
+    },
+
+    // Pixta settings
+    pixta: {
+      enabled: {
+        type: Boolean,
+        default: false
+      },
+      credentials: {
+        username: {
+          type: String,
+          trim: true
+        },
+        // Encrypted password
+        passwordHash: {
+          type: String
+        },
+        ftpHost: {
+          type: String,
+          trim: true
+        },
+        ftpPort: {
+          type: Number,
+          default: 21
+        },
+        remotePath: {
+          type: String,
+          default: '/uploads',
+          trim: true
+        }
+      },
+      settings: {
+        autoUpload: {
+          type: Boolean,
+          default: false
+        },
+        defaultCategory: {
+          type: String,
+          trim: true
+        },
+        defaultKeywords: {
+          type: [String],
+          default: []
+        },
+        defaultDescription: {
+          type: String,
+          trim: true
+        },
+        pricing: {
+          type: String,
+          enum: ['standard', 'premium', 'exclusive'],
+          default: 'standard'
         }
       }
     }
@@ -422,7 +520,7 @@ userSchema.methods.toSafeObject = function() {
 userSchema.methods.setStockServicePassword = function(service, password) {
   if (!password) return;
   
-  const validServices = ['rf123', 'shutterstock', 'adobeStock'];
+  const validServices = ['rf123', 'adobeStock', 'freepik', 'pixta'];
   if (!validServices.includes(service)) {
     throw new Error(`Invalid stock service: ${service}`);
   }
@@ -441,7 +539,7 @@ userSchema.methods.setStockServicePassword = function(service, password) {
 };
 
 userSchema.methods.getStockServicePassword = function(service) {
-  const validServices = ['rf123', 'shutterstock', 'adobeStock'];
+  const validServices = ['rf123', 'adobeStock', 'freepik', 'pixta'];
   if (!validServices.includes(service)) {
     throw new Error(`Invalid stock service: ${service}`);
   }
@@ -458,47 +556,8 @@ userSchema.methods.getStockServicePassword = function(service) {
   }
 };
 
-userSchema.methods.setStockServiceSecret = function(service, secret) {
-  if (!secret) return;
-  
-  const validServices = ['shutterstock', 'adobeStock'];
-  if (!validServices.includes(service)) {
-    throw new Error(`Invalid stock service for secret: ${service}`);
-  }
-  
-  if (!this.stockServices) {
-    this.stockServices = {};
-  }
-  if (!this.stockServices[service]) {
-    this.stockServices[service] = { credentials: {}, settings: {} };
-  }
-  if (!this.stockServices[service].credentials) {
-    this.stockServices[service].credentials = {};
-  }
-  
-  this.stockServices[service].credentials.secretHash = encryption.encrypt(secret);
-};
-
-userSchema.methods.getStockServiceSecret = function(service) {
-  const validServices = ['shutterstock', 'adobeStock'];
-  if (!validServices.includes(service)) {
-    throw new Error(`Invalid stock service for secret: ${service}`);
-  }
-  
-  if (!this.stockServices?.[service]?.credentials?.secretHash) {
-    return null;
-  }
-  
-  try {
-    return encryption.decrypt(this.stockServices[service].credentials.secretHash);
-  } catch (error) {
-    console.error(`Failed to decrypt secret for ${service}:`, error.message);
-    return null;
-  }
-};
-
 userSchema.methods.getStockServiceConfig = function(service) {
-  const validServices = ['rf123', 'shutterstock', 'adobeStock'];
+  const validServices = ['rf123', 'adobeStock', 'freepik', 'pixta'];
   if (!validServices.includes(service)) {
     throw new Error(`Invalid stock service: ${service}`);
   }
@@ -513,22 +572,17 @@ userSchema.methods.getStockServiceConfig = function(service) {
     settings: { ...this.stockServices[service].settings }
   };
   
-  // Decrypt sensitive data
-  if (service === 'rf123' && config.credentials.passwordHash) {
+  // Decrypt sensitive data - all services use FTP with passwords
+  if (config.credentials.passwordHash) {
     config.credentials.password = this.getStockServicePassword(service);
     delete config.credentials.passwordHash;
-  }
-  
-  if (['shutterstock', 'adobeStock'].includes(service) && config.credentials.secretHash) {
-    config.credentials.secret = this.getStockServiceSecret(service);
-    delete config.credentials.secretHash;
   }
   
   return config;
 };
 
 userSchema.methods.updateStockServiceSettings = function(service, settings) {
-  const validServices = ['rf123', 'shutterstock', 'adobeStock'];
+  const validServices = ['rf123', 'adobeStock', 'freepik', 'pixta'];
   if (!validServices.includes(service)) {
     throw new Error(`Invalid stock service: ${service}`);
   }

@@ -73,18 +73,19 @@ async function initializeUser(telegramUser) {
 async function showStockSetupMenu(chatId, userId) {
   const keyboard = {
     inline_keyboard: [
+      [{ text: "🔗 Привязать Adobe Stock", callback_data: "setup_adobeStock" }],
+      [{ text: "🔗 Привязать Freepik", callback_data: "setup_freepik" }],
+      [{ text: "🔗 Привязать Pixta", callback_data: "setup_pixta" }],
       [{ text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }],
-      // [{ text: "🔗 Привязать Shutterstock", callback_data: "setup_shutterstock" }],
-      // [{ text: "🔗 Привязать Adobe Stock", callback_data: "setup_adobe" }],
       [{ text: "ℹ️ Помощь по настройке", callback_data: "setup_help" }]
     ]
   };
 
   const message = `🔧 *Настройка стоковых сервисов*
 
-Для генерации изображений необходимо привязать стоковый сервис 123RF.
+Приоритет сервисов: Adobe Stock → Freepik → Pixta → 123RF
 
-Выберите действие:`;
+Выберите сервис для настройки:`;
 
   await bot.sendMessage(chatId, message, {
     parse_mode: 'Markdown',
@@ -506,10 +507,12 @@ bot.on('callback_query', async (callbackQuery) => {
     // Handle different callback data
     if (data === 'setup_123rf') {
       await handleStockSetup(chatId, userId, user.id, '123rf');
-    // } else if (data === 'setup_shutterstock') {
-    //   await handleStockSetup(chatId, userId, user.id, 'shutterstock');
-    // } else if (data === 'setup_adobe') {
-    //   await handleStockSetup(chatId, userId, user.id, 'adobeStock');
+    } else if (data === 'setup_adobeStock') {
+      await handleStockSetup(chatId, userId, user.id, 'adobeStock');
+    } else if (data === 'setup_freepik') {
+      await handleStockSetup(chatId, userId, user.id, 'freepik');
+    } else if (data === 'setup_pixta') {
+      await handleStockSetup(chatId, userId, user.id, 'pixta');
     } else if (data === 'setup_help') {
       await showSetupHelp(chatId);
     } else if (data === 'manage_stocks') {

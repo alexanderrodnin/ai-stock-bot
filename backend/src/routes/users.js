@@ -243,7 +243,7 @@ router.put('/:userId/stock-services/:service', [
     .isMongoId()
     .withMessage('Invalid user ID format'),
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service'),
   ...validateStockServiceSettings
 ], asyncHandler(userController.updateStockServiceSettings));
@@ -258,7 +258,7 @@ router.post('/:userId/stock-services/:service/test', [
     .isMongoId()
     .withMessage('Invalid user ID format'),
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service')
 ], asyncHandler(userController.testStockServiceConnection));
 
@@ -272,7 +272,7 @@ router.delete('/:userId/stock-services/:service', [
     .isMongoId()
     .withMessage('Invalid user ID format'),
   param('service')
-    .isIn(['123rf', 'shutterstock', 'adobeStock'])
+    .isIn(['123rf', 'adobeStock', 'freepik', 'pixta'])
     .withMessage('Invalid stock service')
 ], asyncHandler(userController.deleteStockServiceSettings));
 
