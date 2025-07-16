@@ -17,9 +17,7 @@ class SegmindService {
     this.defaultParams = {
       width: 1024,
       height: 1024,           // 1:1 aspect ratio as requested
-      num_inference_steps: 4,  // Standard value for fast generation
-      guidance_scale: 3.5,     // Standard guidance scale
-      seed: null              // Will be randomly generated if not provided
+      base64: false           // Get binary data directly
     };
 
     // Initialize axios instance
@@ -29,7 +27,8 @@ class SegmindService {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': this.apiKey
-      }
+      },
+      responseType: 'arraybuffer' // Receive binary data
     });
 
     // Add request/response interceptors for logging
@@ -100,8 +99,8 @@ class SegmindService {
       const payload = {
         prompt: prompt.trim(),
         ...this.defaultParams,
-        // Override seed if provided in options
-        seed: options.seed || this.generateRandomSeed()
+        // Use timestamp as seed for reproducibility
+        seed: options.seed || Date.now()
       };
 
       logger.info('Generating image with Segmind Fast-Flux-Schnell', {
@@ -123,32 +122,17 @@ class SegmindService {
         throw new Error('Empty response from Segmind API');
       }
 
-      // Handle different response formats
-      let imageData;
-      if (response.data.image) {
-        // Base64 encoded image
-        imageData = {
-          format: 'base64',
-          data: response.data.image,
-          mimeType: 'image/png'
-        };
-      } else if (response.data.url) {
-        // Image URL
-        imageData = {
-          format: 'url',
-          data: response.data.url,
-          mimeType: 'image/png'
-        };
-      } else if (typeof response.data === 'string') {
-        // Direct base64 string
-        imageData = {
-          format: 'base64',
-          data: response.data,
-          mimeType: 'image/png'
-        };
-      } else {
-        throw new Error('Unexpected response format from Segmind API');
-      }
+      // Handle binary response data (image file)
+      const imageBuffer = Buffer.from(response.data);
+      
+      // Determine MIME type from response headers or default to JPEG
+      const contentType = response.headers['content-type'] || 'image/jpeg';
+      
+      const imageData = {
+        format: 'buffer',
+        data: imageBuffer,
+        mimeType: contentType
+      };
 
       const result = {
         success: true,
@@ -159,11 +143,10 @@ class SegmindService {
         metadata: {
           width: payload.width,
           height: payload.height,
-          num_inference_steps: payload.num_inference_steps,
-          guidance_scale: payload.guidance_scale,
           seed: payload.seed,
           generatedAt: new Date().toISOString(),
-          processingTime: response.headers['x-processing-time'] || null
+          processingTime: response.headers['x-processing-time'] || null,
+          fileSize: imageBuffer.length
         }
       };
 
@@ -297,7 +280,10 @@ class SegmindService {
    */
   async processImageToBuffer(imageData) {
     try {
-      if (imageData.format === 'base64') {
+      if (imageData.format === 'buffer') {
+        // Data is already a buffer
+        return imageData.data;
+      } else if (imageData.format === 'base64') {
         return this.base64ToBuffer(imageData.data);
       } else if (imageData.format === 'url') {
         return await this.downloadImage(imageData.data);

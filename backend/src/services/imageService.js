@@ -129,8 +129,23 @@ class ImageService {
           usedSource = generationResult.provider;
           
           // Handle different response formats
-          if (generationResult.image.format === 'base64') {
-            // For base64 images, we need to process them differently
+          if (generationResult.image.format === 'buffer') {
+            // For buffer images (Segmind), process directly
+            const fileInfo = await this.processImageBuffer(generationResult.image.data, {
+              userId,
+              userExternalId,
+              prompt
+            });
+
+            imageData = {
+              url: `/api/images/temp/${fileInfo.filename}`, // Temporary URL
+              revised_prompt: generationResult.prompt
+            };
+
+            // Store file info for later use
+            generationResult.processedFileInfo = fileInfo;
+          } else if (generationResult.image.format === 'base64') {
+            // For base64 images, convert to buffer first
             const imageBuffer = this.segmind.base64ToBuffer(generationResult.image.data);
             const fileInfo = await this.processImageBuffer(imageBuffer, {
               userId,

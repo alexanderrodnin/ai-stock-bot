@@ -442,8 +442,13 @@ bot.on('message', async (msg) => {
         reply_markup: keyboard
       });
 
-      // Delete the processing message
-      await bot.deleteMessage(chatId, processingMessage.message_id);
+      // Delete the processing message (safely)
+      try {
+        await bot.deleteMessage(chatId, processingMessage.message_id);
+      } catch (deleteError) {
+        // Ignore deletion errors - message might already be deleted or too old
+        console.log('Could not delete processing message:', deleteError.message);
+      }
       
     } catch (error) {
       console.error('Error generating image:', error.message);
