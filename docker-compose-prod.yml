@@ -42,6 +42,7 @@ services:
       - NODE_ENV=development  # Still development, but on server
       - MONGODB_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME}:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/${MONGO_INITDB_DATABASE}?authSource=admin
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - SEGMIND_API_KEY=${SEGMIND_API_KEY}
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - PORT=${PORT}
