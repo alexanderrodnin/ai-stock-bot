@@ -30,6 +30,16 @@ const config = {
     }
   },
 
+  // Segmind configuration
+  segmind: {
+    apiKey: process.env.SEGMIND_API_KEY,
+    baseURL: process.env.SEGMIND_BASE_URL || 'https://api.segmind.com/v1',
+    timeout: parseInt(process.env.SEGMIND_TIMEOUT) || 120000,
+    models: {
+      fastFluxSchnell: 'fast-flux-schnell'
+    }
+  },
+
   // 123RF FTP configuration
   ftp: {
     host: process.env.FTP_HOST,

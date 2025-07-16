@@ -15,6 +15,8 @@ const User = require('../models/User');
 const Image = require('../models/Image');
 const logger = require('../utils/logger');
 const { getMockImageUrl } = require('../utils/mock-image-urls');
+const configService = require('./configService');
+const SegmindService = require('./aiProviders/segmindService');
 
 class ImageService {
   constructor() {
@@ -23,6 +25,9 @@ class ImageService {
       baseURL: config.openai.baseURL,
       timeout: config.openai.timeout
     });
+    
+    // Initialize Segmind service
+    this.segmind = new SegmindService();
     
     this.tempDir = config.storage.tempDir;
     this.maxFileSize = config.storage.maxFileSize;
@@ -41,7 +46,7 @@ class ImageService {
   }
 
   /**
-   * Generate image using OpenAI DALL-E
+   * Generate image using dynamic AI models (OpenAI DALL-E or Segmind Fast-Flux-Schnell)
    * @param {Object} params - Generation parameters
    * @param {string} params.prompt - Text prompt for image generation
    * @param {string} params.userId - User ID (MongoDB ObjectId)
@@ -71,36 +76,22 @@ class ImageService {
         throw new Error('Daily image generation limit exceeded');
       }
 
-      // Sanitize the prompt to improve chances of passing content filters
-      const sanitizedPrompt = `Create a safe, appropriate digital illustration of: ${prompt.trim()}. Make it suitable for all audiences, non-political, non-controversial, and with no text.`;
+      // Get current AI model configuration
+      const aiConfig = configService.getAIModelConfig();
+      const activeModel = aiConfig.activeModel;
 
-      // Prepare generation parameters
-      const generationParams = {
-        model: options.model || user.preferences?.image?.defaultModel || 'dall-e-3',
-        prompt: sanitizedPrompt,
-        n: 1,
-        size: options.size || user.preferences?.image?.defaultSize || '1024x1024',
-        response_format: 'url'
-      };
-
-      // Add DALL-E 3 specific parameters
-      if (generationParams.model === 'dall-e-3') {
-        generationParams.quality = options.quality || user.preferences?.image?.defaultQuality || 'standard';
-        generationParams.style = options.style || user.preferences?.image?.defaultStyle || 'vivid';
-      }
-
-      logger.info('Generating image with OpenAI', {
+      logger.info('Starting image generation', {
         userId,
         userExternalId,
-        model: generationParams.model,
-        size: generationParams.size,
+        activeModel,
         promptLength: prompt.length,
-        sanitizedPromptLength: sanitizedPrompt.length
+        demoMode
       });
 
       let imageData;
-      let usedSource = 'OpenAI';
+      let usedSource;
       let fallbackReason = null;
+      let generationResult;
 
       // Check if demo mode is forced
       if (demoMode) {
@@ -110,7 +101,6 @@ class ImageService {
           prompt: prompt.substring(0, 50)
         });
 
-        // Use mock image directly in demo mode
         const mockImageUrl = getMockImageUrl(prompt);
         imageData = {
           url: mockImageUrl,
@@ -118,43 +108,71 @@ class ImageService {
         };
         usedSource = 'Demo Mode';
         fallbackReason = 'Demo Mode Activated';
+        generationResult = {
+          success: true,
+          model: 'demo',
+          provider: 'demo',
+          prompt,
+          image: { format: 'url', data: mockImageUrl },
+          metadata: { generatedAt: new Date().toISOString() }
+        };
       } else {
         try {
-          // Try OpenAI first
-          const response = await this.openai.images.generate(generationParams);
-
-          if (!response.data || response.data.length === 0) {
-            throw new Error('No image data received from OpenAI');
+          // Generate image using the active model
+          if (activeModel === 'fast-flux-schnell') {
+            generationResult = await this.generateWithSegmind(prompt, options);
+          } else {
+            // Default to DALL-E
+            generationResult = await this.generateWithOpenAI(prompt, options);
           }
 
-          imageData = response.data[0];
+          usedSource = generationResult.provider;
           
-        } catch (openaiError) {
-          // Handle OpenAI API errors with fallback
-          logger.warn('OpenAI API failed, using fallback', {
+          // Handle different response formats
+          if (generationResult.image.format === 'base64') {
+            // For base64 images, we need to process them differently
+            const imageBuffer = this.segmind.base64ToBuffer(generationResult.image.data);
+            const fileInfo = await this.processImageBuffer(imageBuffer, {
+              userId,
+              userExternalId,
+              prompt
+            });
+
+            imageData = {
+              url: `/api/images/temp/${fileInfo.filename}`, // Temporary URL
+              revised_prompt: generationResult.prompt
+            };
+
+            // Store file info for later use
+            generationResult.processedFileInfo = fileInfo;
+          } else {
+            // URL format
+            imageData = {
+              url: generationResult.image.data,
+              revised_prompt: generationResult.prompt
+            };
+          }
+
+        } catch (aiError) {
+          logger.error('AI generation failed, using fallback', {
             userId,
             userExternalId,
-            error: openaiError.message,
-            status: openaiError.status,
-            errorType: openaiError.error?.type,
-            errorCode: openaiError.code
+            activeModel,
+            error: aiError.message,
+            status: aiError.status
           });
 
-          // Determine fallback reason based on error type
-          if (openaiError.status === 401) {
+          // Determine fallback reason
+          if (aiError.status === 401) {
             fallbackReason = 'Authentication Failed';
-          } else if (openaiError.status === 403) {
+          } else if (aiError.status === 403) {
             fallbackReason = 'API Key Invalid or Forbidden';
-          } else if (openaiError.status === 429 || openaiError.message?.includes('quota')) {
+          } else if (aiError.status === 429 || aiError.message?.includes('quota')) {
             fallbackReason = 'Quota Exceeded';
-          } else if (openaiError.status === 500 || openaiError.status === 502 || openaiError.status === 503) {
-            fallbackReason = 'OpenAI Server Error';
-          } else if (openaiError.error?.type === 'image_generation_user_error') {
-            fallbackReason = 'Content Policy Restriction';
-          } else if (openaiError.message?.includes('timeout')) {
+          } else if (aiError.status >= 500) {
+            fallbackReason = 'Server Error';
+          } else if (aiError.message?.includes('timeout')) {
             fallbackReason = 'Request Timeout';
-          } else if (openaiError.message?.includes('network')) {
-            fallbackReason = 'Network Error';
           } else {
             fallbackReason = 'API Error';
           }
@@ -167,21 +185,28 @@ class ImageService {
           };
           usedSource = `Fallback (${fallbackReason})`;
           
-          logger.info('Using fallback image', {
-            userId,
-            userExternalId,
-            fallbackReason,
-            mockImageUrl
-          });
+          generationResult = {
+            success: false,
+            model: 'fallback',
+            provider: 'fallback',
+            prompt,
+            image: { format: 'url', data: mockImageUrl },
+            metadata: { generatedAt: new Date().toISOString(), error: aiError.message }
+          };
         }
       }
-      
-      // Download and save the image
-      const fileInfo = await this.downloadAndSaveImage(imageData.url, {
-        userId,
-        userExternalId,
-        prompt
-      });
+
+      // Download and save the image (unless already processed)
+      let fileInfo;
+      if (generationResult.processedFileInfo) {
+        fileInfo = generationResult.processedFileInfo;
+      } else {
+        fileInfo = await this.downloadAndSaveImage(imageData.url, {
+          userId,
+          userExternalId,
+          prompt
+        });
+      }
 
       // Create image record in database
       const imageRecord = new Image({
@@ -191,17 +216,18 @@ class ImageService {
         generation: {
           prompt,
           revisedPrompt: imageData.revised_prompt,
-          model: usedSource === 'OpenAI' ? generationParams.model : 'fallback',
-          size: generationParams.size,
-          quality: generationParams.quality,
-          style: generationParams.style,
+          model: generationResult.model,
+          provider: generationResult.provider,
+          size: generationResult.metadata?.width && generationResult.metadata?.height 
+            ? `${generationResult.metadata.width}x${generationResult.metadata.height}` 
+            : '1024x1024',
+          quality: generationResult.metadata?.quality || 'standard',
+          style: generationResult.metadata?.style || 'vivid',
           generatedAt: new Date(),
           usedSource,
           fallbackReason,
-          openaiResponse: usedSource === 'OpenAI' ? {
-            created: Date.now(),
-            data: [imageData]
-          } : null
+          aiResponse: generationResult.success ? generationResult : null,
+          configVersion: aiConfig.version || 1
         },
         file: {
           ...fileInfo,
@@ -215,15 +241,16 @@ class ImageService {
 
       await imageRecord.save();
 
-      // Log detailed file information for debugging
+      // Log detailed information
       logger.info('Image record saved with file details', {
         imageId: imageRecord.id,
         userId,
+        model: generationResult.model,
+        provider: generationResult.provider,
         filePath: fileInfo.path,
         fileName: fileInfo.filename,
         fileSize: fileInfo.size,
         dimensions: `${fileInfo.width}x${fileInfo.height}`,
-        processing: fileInfo.processing,
         usedSource,
         fallbackReason
       });
@@ -239,6 +266,8 @@ class ImageService {
         imageId: imageRecord.id,
         userId,
         userExternalId,
+        model: generationResult.model,
+        provider: generationResult.provider,
         fileSize: fileInfo.size
       });
 
@@ -248,6 +277,7 @@ class ImageService {
         prompt: imageRecord.generation.prompt,
         revisedPrompt: imageRecord.generation.revisedPrompt,
         model: imageRecord.generation.model,
+        provider: imageRecord.generation.provider,
         size: imageRecord.generation.size,
         metadata: imageRecord.metadata,
         createdAt: imageRecord.createdAt
@@ -259,6 +289,192 @@ class ImageService {
         userExternalId,
         error: error.message,
         stack: error.stack
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Generate image using OpenAI DALL-E
+   * @param {string} prompt - Text prompt
+   * @param {Object} options - Generation options
+   * @returns {Promise<Object>} Generation result
+   */
+  async generateWithOpenAI(prompt, options = {}) {
+    try {
+      // Sanitize the prompt to improve chances of passing content filters
+      const sanitizedPrompt = `Create a safe, appropriate digital illustration of: ${prompt.trim()}. Make it suitable for all audiences, non-political, non-controversial, and with no text.`;
+
+      const generationParams = {
+        model: options.model || 'dall-e-3',
+        prompt: sanitizedPrompt,
+        n: 1,
+        size: options.size || '1024x1024',
+        response_format: 'url'
+      };
+
+      // Add DALL-E 3 specific parameters
+      if (generationParams.model === 'dall-e-3') {
+        generationParams.quality = options.quality || 'standard';
+        generationParams.style = options.style || 'vivid';
+      }
+
+      logger.info('Generating image with OpenAI DALL-E', {
+        model: generationParams.model,
+        size: generationParams.size,
+        quality: generationParams.quality,
+        style: generationParams.style
+      });
+
+      const response = await this.openai.images.generate(generationParams);
+
+      if (!response.data || response.data.length === 0) {
+        throw new Error('No image data received from OpenAI');
+      }
+
+      const imageData = response.data[0];
+
+      return {
+        success: true,
+        model: generationParams.model,
+        provider: 'openai',
+        prompt: sanitizedPrompt,
+        image: {
+          format: 'url',
+          data: imageData.url,
+          mimeType: 'image/png'
+        },
+        metadata: {
+          width: parseInt(generationParams.size.split('x')[0]),
+          height: parseInt(generationParams.size.split('x')[1]),
+          quality: generationParams.quality,
+          style: generationParams.style,
+          generatedAt: new Date().toISOString(),
+          revisedPrompt: imageData.revised_prompt
+        }
+      };
+
+    } catch (error) {
+      logger.error('OpenAI generation failed', {
+        error: error.message,
+        status: error.status
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Generate image using Segmind Fast-Flux-Schnell
+   * @param {string} prompt - Text prompt
+   * @param {Object} options - Generation options
+   * @returns {Promise<Object>} Generation result
+   */
+  async generateWithSegmind(prompt, options = {}) {
+    try {
+      logger.info('Generating image with Segmind Fast-Flux-Schnell');
+
+      const result = await this.segmind.generateImage(prompt, options);
+      
+      return result;
+
+    } catch (error) {
+      logger.error('Segmind generation failed', {
+        error: error.message,
+        status: error.status
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Process image buffer and save to storage
+   * @param {Buffer} imageBuffer - Image buffer
+   * @param {Object} metadata - Additional metadata
+   * @returns {Promise<Object>} File information
+   */
+  async processImageBuffer(imageBuffer, metadata = {}) {
+    try {
+      // Validate file size
+      if (imageBuffer.length > this.maxFileSize) {
+        throw new Error(`Image size ${imageBuffer.length} exceeds maximum allowed size ${this.maxFileSize}`);
+      }
+
+      // Get image metadata using sharp
+      const imageMetadata = await sharp(imageBuffer).metadata();
+      
+      // Generate final filename
+      const tempHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
+      const finalFilename = `${Date.now()}_${tempHash.substring(0, 16)}.jpg`;
+      const finalFilePath = path.join(this.tempDir, finalFilename);
+
+      logger.info('Processing image buffer with Sharp', {
+        originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
+        originalFileSize: imageBuffer.length,
+        targetSize: '4000x4000'
+      });
+
+      // Process image with sharp
+      const processedImage = await sharp(imageBuffer)
+        .resize({
+          width: 4000,
+          height: 4000,
+          fit: 'cover',
+          position: 'center',
+          withoutEnlargement: false
+        })
+        .jpeg({
+          quality: 85,
+          progressive: false,
+          mozjpeg: true,
+          chromaSubsampling: '4:4:4'
+        })
+        .withMetadata()
+        .withExif({
+          IFD0: {
+            XResolution: '300/1',
+            YResolution: '300/1',
+            ResolutionUnit: '2'
+          }
+        })
+        .toColorspace('srgb')
+        .toFile(finalFilePath);
+
+      // Get final image metadata
+      const finalImageMetadata = await sharp(finalFilePath).metadata();
+      const finalStats = await fs.stat(finalFilePath);
+      const finalSize = finalStats.size;
+
+      // Generate hash of processed image
+      const verificationBuffer = await fs.readFile(finalFilePath);
+      const finalHash = crypto.createHash('sha256').update(verificationBuffer).digest('hex');
+
+      logger.info('Image buffer processed successfully', {
+        originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
+        processedSize: `${finalImageMetadata.width}x${finalImageMetadata.height}`,
+        originalFileSize: imageBuffer.length,
+        processedFileSize: finalSize
+      });
+
+      return {
+        originalFilename: 'generated_image.png',
+        filename: finalFilename,
+        path: finalFilePath,
+        size: finalSize,
+        mimeType: 'image/jpeg',
+        width: finalImageMetadata.width,
+        height: finalImageMetadata.height,
+        hash: finalHash,
+        processing: {
+          originalWidth: imageMetadata.width,
+          originalHeight: imageMetadata.height,
+          originalSize: imageBuffer.length,
+          resized: finalImageMetadata.width !== imageMetadata.width || finalImageMetadata.height !== imageMetadata.height
+        }
+      };
+
+    } catch (error) {
+      logger.error('Failed to process image buffer', {
+        error: error.message
       });
       throw error;
     }
