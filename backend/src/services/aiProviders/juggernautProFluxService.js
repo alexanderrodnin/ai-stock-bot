@@ -1,23 +1,26 @@
 /**
- * Segmind AI Service
- * Integration with Segmind API for Fast-Flux-Schnell model
+ * Juggernaut Pro Flux AI Service
+ * Integration with Segmind API for Juggernaut Pro Flux model
  */
 
 const axios = require('axios');
 const config = require('../../config/config');
 const logger = require('../../utils/logger');
 
-class SegmindService {
+class JuggernautProFluxService {
   constructor() {
     this.baseURL = 'https://api.segmind.com/v1';
     this.apiKey = config.segmind.apiKey;
     this.timeout = 120000; // 2 minutes timeout
     
-    // Static parameters for Fast-Flux-Schnell (1:1 aspect ratio)
+    // Static parameters for Juggernaut Pro Flux (1:1 aspect ratio for stock images)
     this.defaultParams = {
       width: 1024,
-      height: 1024,           // 1:1 aspect ratio as requested
-      base64: false           // Get binary data directly
+      height: 1024,
+      steps: 25,
+      CFGScale: 7,
+      outputFormat: 'JPG',
+      scheduler: 'Euler'
     };
 
     // Initialize axios instance
@@ -42,7 +45,7 @@ class SegmindService {
     // Request interceptor
     this.client.interceptors.request.use(
       (config) => {
-        logger.info('Segmind API request', {
+        logger.info('Juggernaut Pro Flux API request', {
           url: config.url,
           method: config.method,
           timestamp: new Date().toISOString()
@@ -50,7 +53,7 @@ class SegmindService {
         return config;
       },
       (error) => {
-        logger.error('Segmind API request error', {
+        logger.error('Juggernaut Pro Flux API request error', {
           error: error.message
         });
         return Promise.reject(error);
@@ -60,7 +63,7 @@ class SegmindService {
     // Response interceptor
     this.client.interceptors.response.use(
       (response) => {
-        logger.info('Segmind API response', {
+        logger.info('Juggernaut Pro Flux API response', {
           status: response.status,
           url: response.config.url,
           timestamp: new Date().toISOString()
@@ -68,7 +71,7 @@ class SegmindService {
         return response;
       },
       (error) => {
-        logger.error('Segmind API response error', {
+        logger.error('Juggernaut Pro Flux API response error', {
           status: error.response?.status,
           statusText: error.response?.statusText,
           url: error.config?.url,
@@ -80,7 +83,7 @@ class SegmindService {
   }
 
   /**
-   * Generate image using Fast-Flux-Schnell model
+   * Generate image using Juggernaut Pro Flux model
    * @param {string} prompt - Text prompt for image generation
    * @param {Object} options - Additional options (optional)
    * @returns {Promise<Object>} Generated image data
@@ -95,27 +98,28 @@ class SegmindService {
         throw new Error('Segmind API key is not configured');
       }
 
-      // Prepare request payload
+      // Prepare request payload with fixed parameters
       const payload = {
-        prompt: prompt.trim(),
+        positivePrompt: prompt.trim(),
         ...this.defaultParams,
         // Use timestamp as seed for reproducibility
         seed: options.seed || Date.now()
       };
 
-      logger.info('Generating image with Segmind Fast-Flux-Schnell', {
+      logger.info('Generating image with Juggernaut Pro Flux', {
         prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
         params: {
           width: payload.width,
           height: payload.height,
-          num_inference_steps: payload.num_inference_steps,
-          guidance_scale: payload.guidance_scale,
-          seed: payload.seed
+          steps: payload.steps,
+          CFGScale: payload.CFGScale,
+          seed: payload.seed,
+          scheduler: payload.scheduler
         }
       });
 
       // Make API request
-      const response = await this.client.post('/fast-flux-schnell', payload);
+      const response = await this.client.post('/juggernaut-pro-flux', payload);
 
       // Validate response
       if (!response.data) {
@@ -136,21 +140,24 @@ class SegmindService {
 
       const result = {
         success: true,
-        model: 'fast-flux-schnell',
+        model: 'juggernaut-pro-flux',
         provider: 'segmind',
         prompt,
         image: imageData,
         metadata: {
           width: payload.width,
           height: payload.height,
+          steps: payload.steps,
+          CFGScale: payload.CFGScale,
           seed: payload.seed,
+          scheduler: payload.scheduler,
           generatedAt: new Date().toISOString(),
           processingTime: response.headers['x-processing-time'] || null,
           fileSize: imageBuffer.length
         }
       };
 
-      logger.info('Image generated successfully with Segmind', {
+      logger.info('Image generated successfully with Juggernaut Pro Flux', {
         model: result.model,
         imageFormat: result.image.format,
         seed: result.metadata.seed,
@@ -160,7 +167,7 @@ class SegmindService {
       return result;
 
     } catch (error) {
-      logger.error('Failed to generate image with Segmind', {
+      logger.error('Failed to generate image with Juggernaut Pro Flux', {
         prompt: prompt?.substring(0, 100),
         error: error.message,
         status: error.response?.status,
@@ -168,10 +175,10 @@ class SegmindService {
       });
 
       // Re-throw with more context
-      const enhancedError = new Error(`Segmind API error: ${error.message}`);
+      const enhancedError = new Error(`Juggernaut Pro Flux API error: ${error.message}`);
       enhancedError.originalError = error;
       enhancedError.provider = 'segmind';
-      enhancedError.model = 'fast-flux-schnell';
+      enhancedError.model = 'juggernaut-pro-flux';
       
       if (error.response) {
         enhancedError.status = error.response.status;
@@ -205,11 +212,11 @@ class SegmindService {
       const testPrompt = 'test image';
       await this.generateImage(testPrompt);
       
-      logger.info('Segmind API connection validated successfully');
+      logger.info('Juggernaut Pro Flux API connection validated successfully');
       return true;
 
     } catch (error) {
-      logger.error('Segmind API connection validation failed', {
+      logger.error('Juggernaut Pro Flux API connection validation failed', {
         error: error.message
       });
       return false;
@@ -223,7 +230,7 @@ class SegmindService {
   getStatus() {
     return {
       provider: 'segmind',
-      model: 'fast-flux-schnell',
+      model: 'juggernaut-pro-flux',
       baseURL: this.baseURL,
       hasApiKey: !!this.apiKey,
       timeout: this.timeout,
@@ -300,4 +307,4 @@ class SegmindService {
   }
 }
 
-module.exports = SegmindService;
+module.exports = JuggernautProFluxService;

@@ -341,11 +341,23 @@ class ConfigService {
           models: {
             'dall-e-3': {
               enabled: true,
-              provider: 'openai'
+              provider: 'openai',
+              description: 'OpenAI DALL-E 3 - High quality image generation'
             },
-            'fast-flux-schnell': {
+            'juggernaut-pro-flux': {
               enabled: true,
-              provider: 'segmind'
+              provider: 'segmind',
+              description: 'Juggernaut Pro Flux - Professional quality realistic images'
+            },
+            'seedream-v3': {
+              enabled: true,
+              provider: 'segmind',
+              description: 'Seedream V3 - Artistic and creative image generation'
+            },
+            'hidream-i1-fast': {
+              enabled: true,
+              provider: 'segmind',
+              description: 'HiDream-I1 Fast - Quick high-quality image generation'
             }
           }
         };
@@ -354,12 +366,66 @@ class ConfigService {
           'ai_image_generation',
           defaultConfig,
           'system',
-          'Initial AI image generation configuration'
+          'Initial AI image generation configuration with new models'
         );
 
-        logger.info('Default AI image generation configuration created');
+        logger.info('Default AI image generation configuration created with new models');
       } else {
-        logger.info('AI image generation configuration already exists');
+        // Update existing config to include new models if they don't exist
+        const currentConfig = existingConfig.value;
+        let needsUpdate = false;
+        
+        const newModels = {
+          'juggernaut-pro-flux': {
+            enabled: true,
+            provider: 'segmind',
+            description: 'Juggernaut Pro Flux - Professional quality realistic images'
+          },
+          'seedream-v3': {
+            enabled: true,
+            provider: 'segmind',
+            description: 'Seedream V3 - Artistic and creative image generation'
+          },
+          'hidream-i1-fast': {
+            enabled: true,
+            provider: 'segmind',
+            description: 'HiDream-I1 Fast - Quick high-quality image generation'
+          }
+        };
+
+        // Add new models if they don't exist
+        for (const [modelName, modelConfig] of Object.entries(newModels)) {
+          if (!currentConfig.models[modelName]) {
+            currentConfig.models[modelName] = modelConfig;
+            needsUpdate = true;
+            logger.info(`Added new AI model to config: ${modelName}`);
+          }
+        }
+
+        // Remove deprecated fast-flux-schnell model
+        if (currentConfig.models['fast-flux-schnell']) {
+          delete currentConfig.models['fast-flux-schnell'];
+          needsUpdate = true;
+          logger.info('Removed deprecated model: fast-flux-schnell');
+          
+          // If active model was the deprecated one, switch to default
+          if (currentConfig.activeModel === 'fast-flux-schnell') {
+            currentConfig.activeModel = 'dall-e-3';
+            logger.info('Switched active model from deprecated fast-flux-schnell to dall-e-3');
+          }
+        }
+
+        if (needsUpdate) {
+          await this.updateConfig(
+            'ai_image_generation',
+            currentConfig,
+            'system',
+            'Updated AI models configuration - added new models and removed deprecated ones'
+          );
+          logger.info('AI image generation configuration updated with new models');
+        } else {
+          logger.info('AI image generation configuration is up to date');
+        }
       }
     } catch (error) {
       logger.error('Failed to initialize default AI config', {
@@ -377,8 +443,26 @@ class ConfigService {
     return config || {
       activeModel: 'dall-e-3',
       models: {
-        'dall-e-3': { enabled: true, provider: 'openai' },
-        'fast-flux-schnell': { enabled: true, provider: 'segmind' }
+        'dall-e-3': {
+          enabled: true,
+          provider: 'openai',
+          description: 'OpenAI DALL-E 3 - High quality image generation'
+        },
+        'juggernaut-pro-flux': {
+          enabled: true,
+          provider: 'segmind',
+          description: 'Juggernaut Pro Flux - Professional quality realistic images'
+        },
+        'seedream-v3': {
+          enabled: true,
+          provider: 'segmind',
+          description: 'Seedream V3 - Artistic and creative image generation'
+        },
+        'hidream-i1-fast': {
+          enabled: true,
+          provider: 'segmind',
+          description: 'HiDream-I1 Fast - Quick high-quality image generation'
+        }
       }
     };
   }

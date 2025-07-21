@@ -16,7 +16,9 @@ const Image = require('../models/Image');
 const logger = require('../utils/logger');
 const { getMockImageUrl } = require('../utils/mock-image-urls');
 const configService = require('./configService');
-const SegmindService = require('./aiProviders/segmindService');
+const JuggernautProFluxService = require('./aiProviders/juggernautProFluxService');
+const SeedreamV3Service = require('./aiProviders/seedreamV3Service');
+const HiDreamI1Service = require('./aiProviders/hiDreamI1Service');
 
 class ImageService {
   constructor() {
@@ -26,8 +28,10 @@ class ImageService {
       timeout: config.openai.timeout
     });
     
-    // Initialize Segmind service
-    this.segmind = new SegmindService();
+    // Initialize AI provider services
+    this.juggernautProFlux = new JuggernautProFluxService();
+    this.seedreamV3 = new SeedreamV3Service();
+    this.hiDreamI1 = new HiDreamI1Service();
     
     this.tempDir = config.storage.tempDir;
     this.maxFileSize = config.storage.maxFileSize;
@@ -119,8 +123,12 @@ class ImageService {
       } else {
         try {
           // Generate image using the active model
-          if (activeModel === 'fast-flux-schnell') {
-            generationResult = await this.generateWithSegmind(prompt, options);
+          if (activeModel === 'juggernaut-pro-flux') {
+            generationResult = await this.generateWithJuggernautProFlux(prompt, options);
+          } else if (activeModel === 'seedream-v3') {
+            generationResult = await this.generateWithSeedreamV3(prompt, options);
+          } else if (activeModel === 'hidream-i1-fast') {
+            generationResult = await this.generateWithHiDreamI1(prompt, options);
           } else {
             // Default to DALL-E
             generationResult = await this.generateWithOpenAI(prompt, options);
@@ -146,7 +154,7 @@ class ImageService {
             generationResult.processedFileInfo = fileInfo;
           } else if (generationResult.image.format === 'base64') {
             // For base64 images, convert to buffer first
-            const imageBuffer = this.segmind.base64ToBuffer(generationResult.image.data);
+            const imageBuffer = this.base64ToBuffer(generationResult.image.data);
             const fileInfo = await this.processImageBuffer(imageBuffer, {
               userId,
               userExternalId,
@@ -379,21 +387,67 @@ class ImageService {
   }
 
   /**
-   * Generate image using Segmind Fast-Flux-Schnell
+   * Generate image using Juggernaut Pro Flux
    * @param {string} prompt - Text prompt
    * @param {Object} options - Generation options
    * @returns {Promise<Object>} Generation result
    */
-  async generateWithSegmind(prompt, options = {}) {
+  async generateWithJuggernautProFlux(prompt, options = {}) {
     try {
-      logger.info('Generating image with Segmind Fast-Flux-Schnell');
+      logger.info('Generating image with Juggernaut Pro Flux');
 
-      const result = await this.segmind.generateImage(prompt, options);
+      const result = await this.juggernautProFlux.generateImage(prompt, options);
       
       return result;
 
     } catch (error) {
-      logger.error('Segmind generation failed', {
+      logger.error('Juggernaut Pro Flux generation failed', {
+        error: error.message,
+        status: error.status
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Generate image using Seedream V3
+   * @param {string} prompt - Text prompt
+   * @param {Object} options - Generation options
+   * @returns {Promise<Object>} Generation result
+   */
+  async generateWithSeedreamV3(prompt, options = {}) {
+    try {
+      logger.info('Generating image with Seedream V3');
+
+      const result = await this.seedreamV3.generateImage(prompt, options);
+      
+      return result;
+
+    } catch (error) {
+      logger.error('Seedream V3 generation failed', {
+        error: error.message,
+        status: error.status
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Generate image using HiDream-I1 Fast
+   * @param {string} prompt - Text prompt
+   * @param {Object} options - Generation options
+   * @returns {Promise<Object>} Generation result
+   */
+  async generateWithHiDreamI1(prompt, options = {}) {
+    try {
+      logger.info('Generating image with HiDream-I1 Fast');
+
+      const result = await this.hiDreamI1.generateImage(prompt, options);
+      
+      return result;
+
+    } catch (error) {
+      logger.error('HiDream-I1 Fast generation failed', {
         error: error.message,
         status: error.status
       });
@@ -841,6 +895,24 @@ class ImageService {
   }
 
   // Helper methods
+
+  /**
+   * Convert base64 image to buffer
+   * @param {string} base64Data - Base64 encoded image data
+   * @returns {Buffer} Image buffer
+   */
+  base64ToBuffer(base64Data) {
+    try {
+      // Remove data URL prefix if present
+      const base64String = base64Data.replace(/^data:image\/[a-z]+;base64,/, '');
+      return Buffer.from(base64String, 'base64');
+    } catch (error) {
+      logger.error('Failed to convert base64 to buffer', {
+        error: error.message
+      });
+      throw new Error('Invalid base64 image data');
+    }
+  }
 
   generateTitle(prompt) {
     const title = prompt.substring(0, 100);

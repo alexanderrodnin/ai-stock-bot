@@ -36,7 +36,9 @@ const config = {
     baseURL: process.env.SEGMIND_BASE_URL || 'https://api.segmind.com/v1',
     timeout: parseInt(process.env.SEGMIND_TIMEOUT) || 120000,
     models: {
-      fastFluxSchnell: 'fast-flux-schnell'
+      juggernautProFlux: 'juggernaut-pro-flux',
+      seedreamV3: 'seedream-v3',
+      hiDreamI1Fast: 'hidream-i1-fast'
     }
   },
 
