@@ -64,11 +64,8 @@ nano .env
 ### Переключение моделей
 Модели можно переключать через Admin API или автоматически при сбоях. Подробнее в [AI Models Guide](backend/AI_MODELS_GUIDE.md).
 
-### Тестирование моделей
+### Мониторинг моделей
 ```bash
-# Тестирование всех моделей напрямую через API провайдеров
-bash backend/test/ai-models-direct-test.sh
-
 # Проверка статуса всех моделей через Admin API
 curl http://localhost:3000/api/admin/status
 ```
