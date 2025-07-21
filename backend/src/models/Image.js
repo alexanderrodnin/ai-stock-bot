@@ -50,7 +50,15 @@ const imageSchema = new mongoose.Schema({
     model: {
       type: String,
       required: true,
-      enum: ['dall-e-2', 'dall-e-3', 'fast-flux-schnell', 'fallback', 'demo'],
+      enum: [
+        'dall-e-2', 
+        'dall-e-3', 
+        'juggernaut-pro-flux',
+        'seedream-v3', 
+        'hidream-i1-fast',
+        'fallback', 
+        'demo'
+      ],
       default: 'dall-e-3'
     },
 

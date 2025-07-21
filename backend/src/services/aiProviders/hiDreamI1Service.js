@@ -16,8 +16,6 @@ class HiDreamI1Service {
     // Static parameters for HiDream-I1 Fast (1:1 aspect ratio for stock images)
     this.defaultParams = {
       model_type: 'fast',
-      resolution: '1024 × 1024 (Square)',
-      speed_mode: 'Lightly Juiced 🍊 (more consistent)',
       output_format: 'jpg',
       output_quality: 100
     };
