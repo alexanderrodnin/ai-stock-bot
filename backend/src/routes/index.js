@@ -7,6 +7,7 @@ const express = require('express');
 const imageRoutes = require('./images');
 const uploadRoutes = require('./upload');
 const userRoutes = require('./users');
+const adminRoutes = require('./admin');
 
 const router = express.Router();
 
@@ -26,6 +27,7 @@ router.get('/health', (req, res) => {
 router.use('/images', imageRoutes);
 router.use('/upload', uploadRoutes);
 router.use('/users', userRoutes);
+router.use('/admin', adminRoutes);
 
 // API info endpoint
 router.get('/', (req, res) => {

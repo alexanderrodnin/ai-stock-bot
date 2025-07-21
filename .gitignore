@@ -8,6 +8,7 @@ yarn-error.log*
 
 # Environment variables (all possible variations)
 .env
+.env.prod
 .env.local
 .env.development
 .env.test
@@ -118,6 +119,9 @@ test-*.sh
 *-test.js
 *-debug.js
 reset-*.js
+
+# Backend test directory with generated images
+backend/test/
 
 # Temporary files and directories
 temp/

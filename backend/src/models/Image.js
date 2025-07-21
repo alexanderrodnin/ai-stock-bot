@@ -50,8 +50,23 @@ const imageSchema = new mongoose.Schema({
     model: {
       type: String,
       required: true,
-      enum: ['dall-e-2', 'dall-e-3', 'fallback'],
+      enum: [
+        'dall-e-2', 
+        'dall-e-3', 
+        'juggernaut-pro-flux',
+        'seedream-v3', 
+        'hidream-i1-fast',
+        'fallback', 
+        'demo'
+      ],
       default: 'dall-e-3'
+    },
+
+    // AI provider used for generation
+    provider: {
+      type: String,
+      enum: ['openai', 'segmind', 'fallback', 'demo'],
+      default: 'openai'
     },
 
     // Source of the image (OpenAI or fallback)
@@ -104,13 +119,25 @@ const imageSchema = new mongoose.Schema({
       required: true
     },
 
-    // OpenAI response metadata
+    // OpenAI response metadata (legacy)
     openaiResponse: {
       created: Number,
       data: [{
         url: String,
         revised_prompt: String
       }]
+    },
+
+    // AI response metadata (unified for all providers)
+    aiResponse: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null
+    },
+
+    // Configuration version used for generation
+    configVersion: {
+      type: Number,
+      default: 1
     }
   },
 

@@ -15,6 +15,9 @@ const { errorHandler } = require('./middleware/errorHandler');
 const { defaultLimiter } = require('./middleware/rateLimiter');
 const logger = require('./utils/logger');
 
+// Initialize configuration service
+const configService = require('./services/configService');
+
 const app = express();
 
 // Trust proxy (for rate limiting behind reverse proxy)
