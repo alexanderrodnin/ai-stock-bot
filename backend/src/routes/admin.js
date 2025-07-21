@@ -32,8 +32,14 @@ router.get('/config', adminController.getConfig);
 router.put('/config', adminController.updateConfig);
 router.post('/config/reload', adminController.reloadConfig);
 
-// Model switching route
+// Model switching routes
 router.put('/config/model/:modelName', adminController.switchModel);
+router.post('/config/ai-model/switch', adminController.switchAIModel);
+
+// AI Models management routes
+router.get('/config/ai-models', adminController.getAIModels);
+router.get('/config/ai-models/available', adminController.getAvailableModels);
+router.get('/config/ai-models/history', adminController.getAIModelsHistory);
 
 // Configuration audit logs
 router.get('/config/logs', adminController.getConfigLogs);
