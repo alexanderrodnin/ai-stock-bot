@@ -120,6 +120,9 @@ test-*.sh
 *-debug.js
 reset-*.js
 
+# Backend test directory with generated images
+backend/test/
+
 # Temporary files and directories
 temp/
 tmp/
