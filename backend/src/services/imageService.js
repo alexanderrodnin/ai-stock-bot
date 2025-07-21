@@ -80,14 +80,16 @@ class ImageService {
         throw new Error('Daily image generation limit exceeded');
       }
 
-      // Get current AI model configuration
+      // Get current AI model configuration and fallback order
       const aiConfig = configService.getAIModelConfig();
+      const fallbackOrder = config.aiModels.fallbackOrder;
       const activeModel = aiConfig.activeModel;
 
-      logger.info('Starting image generation', {
+      logger.info('Starting image generation with cascading fallback', {
         userId,
         userExternalId,
         activeModel,
+        fallbackOrder,
         promptLength: prompt.length,
         demoMode
       });
@@ -96,6 +98,7 @@ class ImageService {
       let usedSource;
       let fallbackReason = null;
       let generationResult;
+      let attemptedModels = [];
 
       // Check if demo mode is forced
       if (demoMode) {
@@ -121,101 +124,148 @@ class ImageService {
           metadata: { generatedAt: new Date().toISOString() }
         };
       } else {
-        try {
-          // Generate image using the active model
-          if (activeModel === 'juggernaut-pro-flux') {
-            generationResult = await this.generateWithJuggernautProFlux(prompt, options);
-          } else if (activeModel === 'seedream-v3') {
-            generationResult = await this.generateWithSeedreamV3(prompt, options);
-          } else if (activeModel === 'hidream-i1-fast') {
-            generationResult = await this.generateWithHiDreamI1(prompt, options);
-          } else {
-            // Default to DALL-E
-            generationResult = await this.generateWithOpenAI(prompt, options);
-          }
-
-          usedSource = generationResult.provider;
-          
-          // Handle different response formats
-          if (generationResult.image.format === 'buffer') {
-            // For buffer images (Segmind), process directly
-            const fileInfo = await this.processImageBuffer(generationResult.image.data, {
-              userId,
-              userExternalId,
-              prompt
+        // Try models in fallback order, starting with active model
+        const modelsToTry = [activeModel, ...fallbackOrder.filter(model => model !== activeModel)];
+        
+        for (const modelName of modelsToTry) {
+          try {
+            logger.info('Attempting image generation', {
+              model: modelName,
+              attempt: attemptedModels.length + 1,
+              totalModels: modelsToTry.length
             });
 
-            imageData = {
-              url: `/api/images/temp/${fileInfo.filename}`, // Temporary URL
-              revised_prompt: generationResult.prompt
-            };
+            // Generate image using the current model
+            if (modelName === 'juggernaut-pro-flux') {
+              generationResult = await this.generateWithJuggernautProFlux(prompt, options);
+            } else if (modelName === 'seedream-v3') {
+              generationResult = await this.generateWithSeedreamV3(prompt, options);
+            } else if (modelName === 'hidream-i1-fast') {
+              generationResult = await this.generateWithHiDreamI1(prompt, options);
+            } else if (modelName === 'dall-e-3') {
+              generationResult = await this.generateWithOpenAI(prompt, options);
+            } else {
+              throw new Error(`Unknown model: ${modelName}`);
+            }
 
-            // Store file info for later use
-            generationResult.processedFileInfo = fileInfo;
-          } else if (generationResult.image.format === 'base64') {
-            // For base64 images, convert to buffer first
-            const imageBuffer = this.base64ToBuffer(generationResult.image.data);
-            const fileInfo = await this.processImageBuffer(imageBuffer, {
-              userId,
-              userExternalId,
-              prompt
+            // If we get here, generation was successful
+            usedSource = generationResult.provider;
+            attemptedModels.push({ model: modelName, success: true });
+            
+            logger.info('Image generation successful', {
+              model: modelName,
+              provider: generationResult.provider,
+              attemptNumber: attemptedModels.length
             });
 
-            imageData = {
-              url: `/api/images/temp/${fileInfo.filename}`, // Temporary URL
-              revised_prompt: generationResult.prompt
-            };
+            // Handle different response formats
+            if (generationResult.image.format === 'buffer') {
+              // For buffer images (Segmind), process directly
+              const fileInfo = await this.processImageBuffer(generationResult.image.data, {
+                userId,
+                userExternalId,
+                prompt
+              });
 
-            // Store file info for later use
-            generationResult.processedFileInfo = fileInfo;
-          } else {
-            // URL format
-            imageData = {
-              url: generationResult.image.data,
-              revised_prompt: generationResult.prompt
-            };
+              imageData = {
+                url: `/api/images/temp/${fileInfo.filename}`, // Temporary URL
+                revised_prompt: generationResult.prompt
+              };
+
+              // Store file info for later use
+              generationResult.processedFileInfo = fileInfo;
+            } else if (generationResult.image.format === 'base64') {
+              // For base64 images, convert to buffer first
+              const imageBuffer = this.base64ToBuffer(generationResult.image.data);
+              const fileInfo = await this.processImageBuffer(imageBuffer, {
+                userId,
+                userExternalId,
+                prompt
+              });
+
+              imageData = {
+                url: `/api/images/temp/${fileInfo.filename}`, // Temporary URL
+                revised_prompt: generationResult.prompt
+              };
+
+              // Store file info for later use
+              generationResult.processedFileInfo = fileInfo;
+            } else {
+              // URL format
+              imageData = {
+                url: generationResult.image.data,
+                revised_prompt: generationResult.prompt
+              };
+            }
+
+            // Success - break out of the loop
+            break;
+
+          } catch (aiError) {
+            // Record the failed attempt
+            attemptedModels.push({ 
+              model: modelName, 
+              success: false, 
+              error: aiError.message,
+              status: aiError.status 
+            });
+
+            logger.warn('AI model failed, trying next in fallback chain', {
+              failedModel: modelName,
+              error: aiError.message,
+              status: aiError.status,
+              attemptNumber: attemptedModels.length,
+              remainingModels: modelsToTry.length - attemptedModels.length
+            });
+
+            // If this was the last model to try, we'll fall back to mock images
+            if (attemptedModels.length === modelsToTry.length) {
+              // All AI models failed - use mock image as final fallback
+              logger.error('All AI models failed, using mock image fallback', {
+                userId,
+                userExternalId,
+                attemptedModels,
+                finalError: aiError.message
+              });
+
+              // Determine fallback reason from the last error
+              if (aiError.status === 401) {
+                fallbackReason = 'All Models: Authentication Failed';
+              } else if (aiError.status === 403) {
+                fallbackReason = 'All Models: API Key Invalid or Forbidden';
+              } else if (aiError.status === 429 || aiError.message?.includes('quota')) {
+                fallbackReason = 'All Models: Quota Exceeded';
+              } else if (aiError.status >= 500) {
+                fallbackReason = 'All Models: Server Error';
+              } else if (aiError.message?.includes('timeout')) {
+                fallbackReason = 'All Models: Request Timeout';
+              } else {
+                fallbackReason = 'All Models: API Error';
+              }
+
+              // Use mock image as final fallback
+              const mockImageUrl = getMockImageUrl(prompt);
+              imageData = {
+                url: mockImageUrl,
+                revised_prompt: `Fallback image for: ${prompt}`
+              };
+              usedSource = `Final Fallback (${fallbackReason})`;
+              
+              generationResult = {
+                success: false,
+                model: 'fallback',
+                provider: 'fallback',
+                prompt,
+                image: { format: 'url', data: mockImageUrl },
+                metadata: { 
+                  generatedAt: new Date().toISOString(), 
+                  error: aiError.message,
+                  attemptedModels
+                }
+              };
+            }
+            // Continue to next model in fallback chain
           }
-
-        } catch (aiError) {
-          logger.error('AI generation failed, using fallback', {
-            userId,
-            userExternalId,
-            activeModel,
-            error: aiError.message,
-            status: aiError.status
-          });
-
-          // Determine fallback reason
-          if (aiError.status === 401) {
-            fallbackReason = 'Authentication Failed';
-          } else if (aiError.status === 403) {
-            fallbackReason = 'API Key Invalid or Forbidden';
-          } else if (aiError.status === 429 || aiError.message?.includes('quota')) {
-            fallbackReason = 'Quota Exceeded';
-          } else if (aiError.status >= 500) {
-            fallbackReason = 'Server Error';
-          } else if (aiError.message?.includes('timeout')) {
-            fallbackReason = 'Request Timeout';
-          } else {
-            fallbackReason = 'API Error';
-          }
-
-          // Use mock image as fallback
-          const mockImageUrl = getMockImageUrl(prompt);
-          imageData = {
-            url: mockImageUrl,
-            revised_prompt: `Fallback image for: ${prompt}`
-          };
-          usedSource = `Fallback (${fallbackReason})`;
-          
-          generationResult = {
-            success: false,
-            model: 'fallback',
-            provider: 'fallback',
-            prompt,
-            image: { format: 'url', data: mockImageUrl },
-            metadata: { generatedAt: new Date().toISOString(), error: aiError.message }
-          };
         }
       }
 

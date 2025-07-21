@@ -104,6 +104,30 @@ const config = {
   // Encryption configuration
   encryption: {
     secretKey: process.env.ENCRYPTION_SECRET_KEY || process.env.JWT_SECRET || 'your-encryption-secret-key'
+  },
+
+  // AI Models configuration
+  aiModels: {
+    // Default AI model (changed from dall-e-3 to juggernaut-pro-flux)
+    defaultModel: process.env.DEFAULT_AI_MODEL || 'juggernaut-pro-flux',
+    
+    // Fallback order: Juggernaut Pro Flux -> HiDream-I1 -> Seedream V3 -> DALL-E 3 -> Mock
+    fallbackOrder: [
+      'juggernaut-pro-flux',
+      'hidream-i1-fast',
+      'seedream-v3',
+      'dall-e-3'
+    ],
+    
+    // Model availability check intervals (in milliseconds)
+    healthCheckInterval: parseInt(process.env.AI_HEALTH_CHECK_INTERVAL) || 5 * 60 * 1000, // 5 minutes
+    
+    // Retry configuration for failed models
+    retryConfig: {
+      maxRetries: parseInt(process.env.AI_MAX_RETRIES) || 2,
+      retryDelay: parseInt(process.env.AI_RETRY_DELAY) || 1000, // 1 second
+      backoffMultiplier: parseFloat(process.env.AI_BACKOFF_MULTIPLIER) || 2
+    }
   }
 };
 

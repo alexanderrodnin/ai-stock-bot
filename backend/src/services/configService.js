@@ -337,7 +337,7 @@ class ConfigService {
       
       if (!existingConfig) {
         const defaultConfig = {
-          activeModel: 'dall-e-3',
+          activeModel: 'juggernaut-pro-flux',
           models: {
             'dall-e-3': {
               enabled: true,
@@ -441,7 +441,7 @@ class ConfigService {
   getAIModelConfig() {
     const config = this.getConfig('ai_image_generation');
     return config || {
-      activeModel: 'dall-e-3',
+      activeModel: 'juggernaut-pro-flux',
       models: {
         'dall-e-3': {
           enabled: true,

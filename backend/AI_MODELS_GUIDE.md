@@ -4,21 +4,21 @@ This document describes the AI models available in the AI Stock Bot system and h
 
 ## Available AI Models
 
-### 1. OpenAI DALL-E 3 (Default)
-- **Model ID**: `dall-e-3`
-- **Provider**: OpenAI
-- **Description**: High-quality image generation with excellent prompt understanding
-- **Output Format**: URL (downloaded and processed)
-- **Resolution**: 1024x1024 (processed to 4000x4000)
-- **Configuration**: Requires `OPENAI_API_KEY`
-
-### 2. Juggernaut Pro Flux
+### 1. Juggernaut Pro Flux (Default)
 - **Model ID**: `juggernaut-pro-flux`
 - **Provider**: Segmind
 - **Description**: Professional quality realistic images with excellent detail
 - **Output Format**: Binary buffer (direct processing)
 - **Resolution**: 1024x1024 (processed to 4000x4000)
 - **Configuration**: Requires `SEGMIND_API_KEY`
+
+### 2. OpenAI DALL-E 3
+- **Model ID**: `dall-e-3`
+- **Provider**: OpenAI
+- **Description**: High-quality image generation with excellent prompt understanding
+- **Output Format**: URL (downloaded and processed)
+- **Resolution**: 1024x1024 (processed to 4000x4000)
+- **Configuration**: Requires `OPENAI_API_KEY`
 
 ### 3. Seedream V3
 - **Model ID**: `seedream-v3`
@@ -59,29 +59,67 @@ The system uses dynamic configuration stored in MongoDB. The AI model configurat
 Default configuration:
 ```json
 {
-  "activeModel": "dall-e-3",
+  "activeModel": "juggernaut-pro-flux",
   "models": {
-    "dall-e-3": {
-      "enabled": true,
-      "provider": "openai",
-      "description": "OpenAI DALL-E 3 - High quality image generation"
-    },
     "juggernaut-pro-flux": {
       "enabled": true,
       "provider": "segmind",
       "description": "Juggernaut Pro Flux - Professional quality realistic images"
+    },
+    "hidream-i1-fast": {
+      "enabled": true,
+      "provider": "segmind",
+      "description": "HiDream-I1 Fast - Quick high-quality image generation"
     },
     "seedream-v3": {
       "enabled": true,
       "provider": "segmind",
       "description": "Seedream V3 - Artistic and creative image generation"
     },
-    "hidream-i1-fast": {
+    "dall-e-3": {
       "enabled": true,
-      "provider": "segmind",
-      "description": "HiDream-I1 Fast - Quick high-quality image generation"
+      "provider": "openai",
+      "description": "OpenAI DALL-E 3 - High quality image generation"
     }
   }
+}
+```
+
+## Cascading Fallback System
+
+The system implements a sophisticated cascading fallback mechanism that automatically tries multiple AI models in order of preference:
+
+### Fallback Order
+1. **Juggernaut Pro Flux** (Primary - default model)
+2. **HiDream-I1 Fast** (First fallback)
+3. **Seedream V3** (Second fallback)
+4. **DALL-E 3** (Third fallback)
+5. **Mock Images** (Final fallback)
+
+### How It Works
+- When a generation request is made, the system starts with the active model
+- If the active model fails, it automatically tries the next model in the fallback chain
+- Each attempt is logged with detailed error information
+- Only if all AI models fail does the system fall back to mock images
+- The user receives the image from the first successful model
+
+### Fallback Triggers
+- API authentication failures (401, 403)
+- Rate limiting/quota exceeded (429)
+- Server errors (5xx)
+- Network timeouts
+- Invalid API responses
+
+### Configuration
+The fallback order is configured in `backend/src/config/config.js`:
+```javascript
+aiModels: {
+  fallbackOrder: [
+    'juggernaut-pro-flux',
+    'hidream-i1-fast', 
+    'seedream-v3',
+    'dall-e-3'
+  ]
 }
 ```
 
