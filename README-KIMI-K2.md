@@ -1,236 +1,258 @@
-# 🤖 AI Stock Bot - Kimi K2 Documentation
+# 🤖 AI Stock Bot - Полное руководство по проекту
 
-## 📋 Project Overview
+## 📋 Обзор проекта
 
-AI Stock Bot - это комплексная система для генерации изображений с использованием множественных AI-моделей (DALL-E 3, Juggernaut Pro Flux, Seedream V3, HiDream-I1) и автоматической загрузки на стоковые площадки. Система состоит из микросервисной архитектуры с REST API backend и Telegram ботом.
+**AI Stock Bot** - это микросервисная система для генерации изображений с помощью множественных AI моделей и автоматической загрузки на стоковые площадки. Проект состоит из трех основных компонентов:
 
-### 🎯 Основные возможности
-- 🎨 Генерация изображений через 4 AI-модели
-- 📤 Автоматическая загрузка на 123RF
-- 💰 Система оплаты через YooMoney
-- 🔐 Безопасное хранение данных
-- 🐳 Docker контейнеризация
-- 📊 Административная панель
+- **Backend API** - RESTful сервис на Node.js для генерации изображений и управления пользователями
+- **Telegram Bot** - Интерфейс пользователя через Telegram
+- **Payment System** - Система оплаты через YooMoney (в разработке)
 
 ## 🏗️ Архитектура
 
-### Системные компоненты
+### Структура проекта
 ```
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Telegram Bot  │    │   Backend API   │    │   MongoDB       │
-│   (tg-bot/)     │◄──►│   (backend/)    │◄──►│   (Database)    │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
-                                │
-                       ┌─────────────────┐
-                       │ Payment Monitor │
-                       │ (payment-monitor)│
-                       └─────────────────┘
+ai-stock-bot/
+├── backend/                 # Backend API сервис
+│   ├── src/
+│   │   ├── controllers/     # REST API контроллеры
+│   │   ├── models/         # MongoDB модели
+│   │   ├── services/       # Бизнес-логика и AI провайдеры
+│   │   ├── routes/         # API маршруты
+│   │   └── middleware/     # Express middleware
+│   ├── docker/             # Docker конфигурации
+│   └── scripts/            # Утилиты и миграции
+├── tg-bot/                 # Telegram Bot
+│   ├── services/           # Сервисы бота
+│   └── index.js           # Основной файл бота
+├── doc/                    # Документация
+├── docker-compose.yml      # Разработка
+├── docker-compose-prod.yml # Продакшен
+└── .env.example           # Пример переменных окружения
 ```
-
-### Технологический стек
-- **Backend**: Node.js 18+, Express.js, MongoDB
-- **AI Models**: OpenAI DALL-E 3, Segmind (Flux, Seedream, HiDream)
-- **Payment**: YooMoney, Email monitoring
-- **Deployment**: Docker, Docker Compose
-- **Monitoring**: Health checks, logging
 
 ## 🚀 Быстрый старт
 
 ### 1. Клонирование и подготовка
 ```bash
-git clone git@github.com:alexanderrodnin/ai-stock-bot.git
+git clone https://github.com/alexanderrodnin/ai-stock-bot.git
 cd ai-stock-bot
+cp .env.example .env
 ```
 
 ### 2. Настройка переменных окружения
-```bash
-# Копируем примеры
-cp .env.example .env
-cp .env.prod.example .env.prod
-
-# Редактируем основные переменные
-nano .env
-```
 
 **Обязательные переменные:**
 ```bash
-# Telegram Bot
-TELEGRAM_TOKEN=your_telegram_bot_token_from_botfather
-
-# OpenAI
+# Backend
 OPENAI_API_KEY=your_openai_api_key
+JWT_SECRET=your_jwt_secret_32_chars_minimum
+ENCRYPTION_KEY=your_32_character_encryption_key
+
+# Telegram Bot
+TELEGRAM_TOKEN=your_telegram_bot_token
 
 # MongoDB
 MONGODB_URI=mongodb://admin:password123@localhost:27017/ai-stock-bot
-
-# Security
-JWT_SECRET=your_32_character_jwt_secret
-ENCRYPTION_KEY=your_32_character_encryption_key
-
-# YooMoney (для оплаты)
-YOOMONEY_WALLET=your_yoomoney_wallet
 ```
 
-### 3. Запуск через Docker (рекомендуется)
-
-#### Разработка
+**Опциональные переменные:**
 ```bash
-# Полный стек
-docker-compose --profile backend --profile bot --profile tools up -d
+# Segmind API (дополнительные AI модели)
+SEGMIND_API_KEY=your_segmind_api_key
 
-# Только backend и MongoDB
+# 123RF FTP (для загрузки на стоки)
+FTP_HOST=ftp.123rf.com
+FTP_USER=your_ftp_username
+FTP_PASSWORD=your_ftp_password
+```
+
+### 3. Запуск через Docker (рекомендуемый)
+
+#### Полный стек
+```bash
+docker-compose --profile backend --profile bot up -d
+```
+
+#### Только Backend + Database
+```bash
 docker-compose --profile backend up -d
+```
 
-# Только Telegram Bot
+#### Только Telegram Bot
+```bash
 docker-compose --profile bot up -d
 ```
 
-#### Продакшен
-```bash
-# С автоматическими обновлениями
-docker-compose -f docker-compose-prod.yml --env-file .env.prod up -d
-```
-
 ### 4. Проверка работы
-- **Backend API**: http://localhost:3000/health
+- **Backend API**: http://localhost:3000
+- **Health Check**: http://localhost:3000/health
 - **MongoDB Express**: http://localhost:8081 (admin/admin)
-- **Telegram Bot**: найдите вашего бота и отправьте `/start`
 
-## 📊 Структура проекта
+## 🎨 Поддерживаемые AI модели
 
-```
-ai-stock-bot/
-├── backend/                    # REST API сервис
-│   ├── src/
-│   │   ├── controllers/        # API контроллеры
-│   │   ├── models/            # MongoDB модели
-│   │   ├── routes/            # API маршруты
-│   │   ├── services/          # Бизнес-логика
-│   │   ├── utils/             # Утилиты
-│   │   └── config/            # Конфигурация
-│   ├── docker/                # Docker конфигурации
-│   └── scripts/               # Служебные скрипты
-├── tg-bot/                    # Telegram Bot
-│   ├── services/              # Сервисы бота
-│   └── index.js              # Основной файл
-├── payment-monitor/           # Мониторинг оплат
-├── doc/                       # Документация
-├── docker-compose.yml         # Разработка
-├── docker-compose-prod.yml    # Продакшен
-└── PAYMENT_DESIGN_DOC.md     # Документация по оплате
-```
-
-## 🎨 Поддерживаемые AI-модели
-
-| Модель | Провайдер | Особенности | Требует API ключ |
-|--------|-----------|-------------|------------------|
-| **DALL-E 3** | OpenAI | Высокое качество, безопасность | `OPENAI_API_KEY` |
+### Текущие модели
+| Модель | Провайдер | Описание | Требования |
+|--------|-----------|----------|------------|
+| **DALL-E 3** | OpenAI | Высококачественная генерация | `OPENAI_API_KEY` |
 | **Juggernaut Pro Flux** | Segmind | Профессиональные реалистичные изображения | `SEGMIND_API_KEY` |
-| **Seedream V3** | Segmind | Художественная генерация | `SEGMIND_API_KEY` |
-| **HiDream-I1 Fast** | Segmind | Быстрая генерация | `SEGMIND_API_KEY` |
+| **Seedream V3** | Segmind | Художественная и креативная генерация | `SEGMIND_API_KEY` |
+| **HiDream-I1 Fast** | Segmind | Быстрая высококачественная генерация | `SEGMIND_API_KEY` |
 
 ### Переключение моделей
 ```bash
 # Через Admin API
 curl -X POST http://localhost:3000/api/admin/config/ai-model/switch \
   -H "Content-Type: application/json" \
-  -d '{"model": "juggernaut-pro-flux", "reason": "Testing"}'
+  -d '{"model": "juggernaut-pro-flux", "reason": "Testing new model"}'
 ```
 
-## 💰 Система оплаты
-
-### Возможности
-- Пополнение счета через YooMoney
-- Автоматическое зачисление средств
-- История транзакций
-- Баланс в Telegram боте
-
-### Процесс оплаты
-1. Пользователь выбирает сумму в Telegram
-2. Бот генерирует ссылку на оплату
-3. Пользователь оплачивает через YooMoney
-4. Система мониторит email уведомления
-5. Средства автоматически зачисляются
-
-### Команды Telegram бота
-- `/balance` - просмотр баланса
-- `/topup` - пополнение счета
-- `/history` - история транзакций
-
-## 🔧 API Endpoints
+## 📊 API Endpoints
 
 ### Основные эндпоинты
-- `GET /health` - Проверка состояния
-- `POST /api/users` - Создание пользователя
-- `POST /api/images/generate` - Генерация изображения
-- `POST /api/upload/123rf` - Загрузка на 123RF
 
-### Административные эндпоинты
-- `GET /api/admin/status` - Статус системы
-- `GET /api/admin/config` - Конфигурация AI-моделей
-- `PUT /api/admin/config/model/:name` - Переключение модели
-
-### Платежные эндпоинты
-- `POST /api/payments/create` - Создание платежа
-- `GET /api/accounts/:userId/balance` - Баланс пользователя
-- `GET /api/accounts/:userId/transactions` - История транзакций
-
-## 🐳 Docker команды
-
-### Разработка
+#### Генерация изображений
 ```bash
-# Запуск всех сервисов
-docker-compose --profile backend --profile bot --profile tools up -d
+# Генерация изображения
+POST /api/images/generate
+{
+  "prompt": "A beautiful landscape with mountains",
+  "userId": "user123",
+  "options": {
+    "model": "dall-e-3",
+    "size": "1024x1024"
+  }
+}
 
-# Просмотр логов
-docker-compose logs -f backend
-docker-compose logs -f tg-bot
-docker-compose logs -f payment-monitor
-
-# Остановка
-docker-compose down
-
-# Очистка
-docker-compose down -v
-docker system prune -f
+# Получение изображения
+GET /api/images/:imageId/stream?userId=user123
 ```
 
-### Продакшен
+#### Управление пользователями
 ```bash
-# Запуск
-docker-compose -f docker-compose-prod.yml --env-file .env.prod up -d
+# Создание/получение пользователя
+POST /api/users
+{
+  "externalId": "telegram_123",
+  "externalSystem": "telegram",
+  "profile": {
+    "username": "john_doe",
+    "firstName": "John"
+  }
+}
 
-# Обновление
-docker-compose -f docker-compose-prod.yml pull
-docker-compose -f docker-compose-prod.yml up -d
+# Получение пользователя
+GET /api/users/:id
+```
 
-# Бэкап MongoDB
-docker exec ai-stock-bot-mongodb-prod mongodump --out /tmp/backup
+#### Загрузка на стоки
+```bash
+# Загрузка на 123RF
+POST /api/upload/123rf
+{
+  "imageId": "img_123",
+  "userId": "user123",
+  "title": "Mountain Landscape",
+  "keywords": ["landscape", "mountains"]
+}
+```
+
+### Admin API
+- `GET /api/admin/status` - Статус системы
+- `GET /api/admin/config` - Текущая конфигурация
+- `PUT /api/admin/config/model/:modelName` - Переключение модели
+- `GET /api/admin/config/ai-models/history` - История переключений
+
+## 🔧 Разработка
+
+### Локальный запуск Backend
+```bash
+cd backend
+npm install
+npm run dev
+```
+
+### Локальный запуск Telegram Bot
+```bash
+cd tg-bot
+npm install
+npm start
+```
+
+### Docker команды
+```bash
+# Запуск с пересборкой
+npm run docker:up:build
+
+# Остановка сервисов
+npm run docker:down
+
+# Просмотр логов
+npm run docker:logs
+```
+
+## 💰 Система оплаты (в разработке)
+
+### Архитектура оплаты
+- **YooMoney Integration** - Прием платежей от физлиц
+- **Email Monitor** - Автоматическое отслеживание платежей
+- **Balance System** - Управление балансом пользователей
+
+### Компоненты системы
+1. **Payment Monitor** - Отслеживание email уведомлений от YooMoney
+2. **Backend Extensions** - API для управления платежами и балансом
+3. **Telegram Integration** - Интерфейс пополнения через бота
+
+## 🗄️ Модели данных
+
+### User Model
+```javascript
+{
+  externalId: String,        // Telegram ID
+  externalSystem: String,    // 'telegram', 'web', etc.
+  profile: {
+    username: String,
+    firstName: String,
+    lastName: String,
+    language: String
+  },
+  stockServices: {
+    rf123: {
+      enabled: Boolean,
+      credentials: { username, password },
+      settings: { autoUpload, keywords }
+    }
+  }
+}
+```
+
+### Image Model
+```javascript
+{
+  userId: ObjectId,
+  prompt: String,
+  model: String,            // Использованная AI модель
+  url: String,              // URL изображения
+  metadata: Object,         // Дополнительные данные
+  status: String            // 'generated', 'uploaded', etc.
+}
 ```
 
 ## 🔒 Безопасность
 
-### Меры безопасности
-- Шифрование чувствительных данных (AES-256-GCM)
-- Rate limiting для API
-- JWT токены для аутентификации
-- Non-root пользователи в Docker
-- Валидация всех входных данных
+### Реализованные меры
+- **Шифрование данных** - AES-256-GCM для чувствительной информации
+- **Rate limiting** - Ограничение количества запросов
+- **JWT токены** - Аутентификация и авторизация
+- **Input validation** - Валидация всех входных данных
+- **CORS** - Настройка cross-origin запросов
 
-### Переменные окружения
-```bash
-# Критичные переменные (обязательны)
-JWT_SECRET=your_32_character_secret_key
-ENCRYPTION_KEY=your_32_character_encryption_key
-OPENAI_API_KEY=your_openai_api_key
-TELEGRAM_TOKEN=your_telegram_bot_token
+### Лимиты
+- Общий API: 100 запросов / 15 минут
+- Генерация изображений: 10 запросов / 5 минут
+- Загрузки: 20 запросов / 10 минут
 
-# Дополнительные переменные
-YOOMONEY_WALLET=your_yoomoney_wallet
-SEGMIND_API_KEY=your_segmind_api_key
-```
-
-## 📊 Мониторинг
+## 📈 Мониторинг
 
 ### Health Checks
 ```bash
@@ -238,156 +260,212 @@ SEGMIND_API_KEY=your_segmind_api_key
 curl http://localhost:3000/health
 
 # Проверка MongoDB
-docker exec ai-stock-bot-mongodb mongosh --eval "db.adminCommand('ismaster')"
-
-# Проверка логов
-docker-compose logs -f --tail=50
+docker exec -it ai-stock-bot-mongodb mongosh -u admin -p password123
 ```
 
-### Метрики
-- Успешность генерации изображений
-- Время обработки платежей
-- Использование AI-моделей
-- Баланс пользователей
+### Логирование
+- **Development**: Человекочитаемый формат
+- **Production**: JSON формат для анализа
+- **Уровни**: error, warn, info, debug
 
-## 🛠️ Разработка
+## 🐳 Docker Production
 
-### Локальный запуск
+### Запуск в продакшене
 ```bash
-# Backend
-cd backend
-npm install
-npm run dev
+# Копирование продакшен конфигурации
+cp .env.prod.example .env.prod
 
-# Telegram Bot
-cd tg-bot
-npm install
-npm start
-
-# Payment Monitor
-cd payment-monitor
-npm install
-npm start
+# Запуск с автоматическими обновлениями
+docker-compose -f docker-compose-prod.yml --env-file .env.prod up -d
 ```
 
-### Структура моделей данных
+### Используемые образы
+- **Backend**: `alexanderrodnin/ai-stock-bot-backend:latest`
+- **Telegram Bot**: `alexanderrodnin/ai-stock-bot-tg-bot:latest`
+- **MongoDB**: `mongo:7.0.5`
+- **Watchtower**: Автоматические обновления
 
-#### User Model
-```javascript
-{
-  externalId: String,      // Telegram ID
-  externalSystem: String,  // 'telegram'
-  profile: {
-    username: String,
-    firstName: String,
-    lastName: String,
-    language: String
-  },
-  preferences: Object,
-  stockServices: Object    // Настройки стоков
-}
-```
+## 🛠️ Развертывание
 
-#### Account Model
-```javascript
-{
-  userId: ObjectId,
-  balance: Number,
-  currency: String,
-  transactions: [{
-    type: String,
-    amount: Number,
-    description: String,
-    createdAt: Date
-  }]
-}
-```
+### Пошаговая инструкция по настройке Payment System
 
-#### Payment Model
-```javascript
-{
-  userId: ObjectId,
-  amount: Number,
-  currency: String,
-  status: String,
-  yoomoneyLabel: String,
-  createdAt: Date,
-  completedAt: Date
-}
-```
+#### Шаг 1: Настройка YooMoney (15 минут)
+1. **Регистрация кошелька**
+   - Перейдите на https://yoomoney.ru
+   - Создайте аккаунт физического лица
+   - Подтвердите номер телефона
 
-## 🚀 Развертывание
+2. **Создание формы оплаты**
+   - Перейдите в "Прием платежей" → "Форма оплаты"
+   - Нажмите "Создать форму"
+   - Укажите:
+     - Название: "AI Stock Bot"
+     - Описание: "Пополнение счета для генерации изображений"
+     - Сумма: "Произвольная"
+     - Email уведомления: ваш email
 
-### Подготовка сервера
-```bash
-# Установка Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+#### Шаг 2: Настройка Gmail для Payment Monitor (10 минут)
+1. **Создание почты**
+   - Создайте новый Gmail: `aistockbot.payments@gmail.com`
+   - Включите двухфакторную аутентификацию
 
-# Установка Docker Compose
-sudo apt-get install docker-compose-plugin
-```
+2. **App Password**
+   - Google Account → Security → 2-Step Verification
+   - App passwords → Generate
+   - Выберите "Mail" → Скопируйте пароль
 
-### Продакшен деплой
-```bash
-# Копирование файлов
-scp -r ai-stock-bot user@your-server:/opt/
+3. **Настройка фильтров**
+   - Settings → Filters and Blocked Addresses
+   - Create filter:
+     - From: `noreply@yoomoney.ru`
+     - Subject: `Платеж получен`
+     - Apply label: "YooMoney-Payments"
 
-# Запуск
-ssh user@your-server
-cd /opt/ai-stock-bot
-docker-compose -f docker-compose-prod.yml up -d
-```
+#### Шаг 3: Разработка Payment Monitor (30 минут)
+1. **Создание нового сервиса**
+   ```bash
+   mkdir payment-monitor
+   cd payment-monitor
+   npm init -y
+   npm install imap dotenv axios
+   ```
 
-## 📞 Поддержка
+2. **Структура сервиса**
+   ```
+   payment-monitor/
+   ├── src/
+   │   ├── emailMonitor.js    # Мониторинг email
+   │   ├── paymentParser.js   # Парсинг платежей
+   │   └── webhookService.js  # Отправка webhook
+   ├── .env
+   └── index.js
+   ```
 
-### Решение проблем
-1. **Ошибка подключения к MongoDB**
-   - Проверьте `MONGODB_URI`
-   - Убедитесь, что MongoDB запущена
+3. **Конфигурация (.env)**
+   ```bash
+   GMAIL_USER=aistockbot.payments@gmail.com
+   GMAIL_APP_PASSWORD=your_app_password
+   BACKEND_URL=http://localhost:3000/api
+   CHECK_INTERVAL=30000
+   ```
 
-2. **Ошибка генерации изображений**
-   - Проверьте `OPENAI_API_KEY`
-   - Проверьте лимиты API
+#### Шаг 4: Изменения в Backend (45 минут)
 
-3. **Платежи не обрабатываются**
-   - Проверьте настройки Gmail
-   - Проверьте `YOOMONEY_WALLET`
+1. **Новые модели MongoDB**
+   ```javascript
+   // backend/src/models/Payment.js
+   const paymentSchema = new mongoose.Schema({
+     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+     amount: Number,
+     currency: { type: String, default: 'RUB' },
+     status: { type: String, enum: ['pending', 'completed', 'failed'] },
+     yoomoneyOperationId: String,
+     yoomoneyLabel: String,
+     createdAt: { type: Date, default: Date.now },
+     completedAt: Date
+   });
+   ```
 
-### Полезные команды
-```bash
-# Проверка логов
-docker-compose logs -f backend | grep ERROR
+2. **Новые API endpoints**
+   ```javascript
+   // backend/src/routes/payments.js
+   POST /api/payments/create     # Создание платежа
+   POST /api/payments/webhook    # Webhook от Payment Monitor
+   GET  /api/payments/:userId    # История платежей
+   GET  /api/users/:id/balance   # Текущий баланс
+   ```
 
-# Проверка использования памяти
-docker stats
+3. **Сервисы**
+   ```javascript
+   // backend/src/services/paymentService.js
+   - createPayment(userId, amount)
+   - confirmPayment(yoomoneyLabel, operationId)
+   - getUserBalance(userId)
+   - getPaymentHistory(userId)
+   ```
 
-# Перезапуск сервиса
-docker-compose restart backend
-```
+#### Шаг 5: Изменения в Telegram Bot (30 минут)
 
-## 📚 Дополнительная документация
+1. **Новые команды**
+   ```javascript
+   // tg-bot/index.js
+   bot.onText(/\/topup (\d+)/, handleTopupCommand);
+   bot.onText(/\/balance/, handleBalanceCommand);
+   bot.on('callback_query', handlePaymentCallback);
+   ```
 
-- [Backend API Guide](backend/README.md) - Детальная документация API
-- [Admin API Guide](backend/ADMIN_API_GUIDE.md) - Управление AI-моделями
-- [AI Models Guide](backend/AI_MODELS_GUIDE.md) - Настройка AI-моделей
+2. **Новые функции**
+   ```javascript
+   // tg-bot/services/paymentService.js
+   - createPaymentRequest(userId, amount)
+   - checkPaymentStatus(paymentId)
+   - formatPaymentMessage(paymentData)
+   ```
+
+3. **Интерфейс пополнения**
+   - Inline клавиатура с суммами (50, 100, 200, 500 руб)
+   - Подтверждение перед созданием платежа
+   - Уведомление о зачислении средств
+
+#### Шаг 6: Обновление деплоймента (15 минут)
+
+1. **Docker Compose обновление**
+   ```yaml
+   # docker-compose.yml
+   payment-monitor:
+     build: ./payment-monitor
+     environment:
+       - GMAIL_USER=${GMAIL_USER}
+       - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+       - BACKEND_URL=http://backend:3000/api
+     depends_on:
+       - backend
+   ```
+
+2. **Переменные окружения**
+   ```bash
+   # .env.prod
+   YOOMONEY_WALLET=410011234567890
+   GMAIL_USER=aistockbot.payments@gmail.com
+   GMAIL_APP_PASSWORD=your_app_password
+   ```
+
+3. **Перезапуск сервисов**
+   ```bash
+   docker-compose -f docker-compose-prod.yml --env-file .env.prod up -d
+   ```
+
+## 📚 Документация
+
+### Дополнительные материалы
+- [Backend API Guide](backend/README.md) - Полная документация API
+- [Admin API Guide](backend/ADMIN_API_GUIDE.md) - Управление AI моделями
+- [AI Models Guide](backend/AI_MODELS_GUIDE.md) - Информация о моделях
+- [Production Guide](PRODUCTION.md) - Развертывание в продакшене
 - [Payment Design](PAYMENT_DESIGN_DOC.md) - Система оплаты
-- [Production Guide](PRODUCTION.md) - Продакшен деплой
+
+### Примеры использования
+- [test-user-api.sh](test-user-api.sh) - Тестирование API
+- [backend/test/integration/](backend/test/integration/) - Интеграционные тесты
 
 ## 🤝 Вклад в проект
 
 1. Fork репозитория
-2. Создайте feature branch
-3. Commit изменения
-4. Push в branch
-5. Создайте Pull Request
+2. Создайте feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit изменения (`git commit -m 'Add amazing feature'`)
+4. Push в branch (`git push origin feature/amazing-feature`)
+5. Откройте Pull Request
+
+## 📞 Поддержка
+
+- **GitHub Issues**: https://github.com/alexanderrodnin/ai-stock-bot/issues
+- **Email**: support@aistockbot.ru
+- **Telegram**: @ai_stock_bot_support
 
 ## 📄 Лицензия
 
 MIT License - см. [LICENSE](LICENSE) файл для деталей.
 
-## 📞 Контакты
-
-- **GitHub Issues**: [Создать Issue](https://github.com/alexanderrodnin/ai-stock-bot/issues)
-- **Email**: alexander.rodnin@gmail.com
-- **Telegram**: @alexanderrodnin
+---
+**Последнее обновление**: 22.07.2025
+**Версия**: 1.0.0
