@@ -80,14 +80,13 @@ async function showStockSetupMenu(chatId, userId) {
     ]
   };
 
-  const message = `🔧 *Настройка стоковых сервисов*
+  const message = `🔧 Настройка стоковых сервисов
 
 Для генерации изображений необходимо привязать стоковый сервис 123RF.
 
 Выберите действие:`;
 
   await bot.sendMessage(chatId, message, {
-    parse_mode: 'Markdown',
     reply_markup: keyboard
   });
 }
@@ -650,12 +649,11 @@ async function handleSetupStep(msg, session) {
           // Check if user entered email instead of nickname for 123RF
           if (session.service === '123rf' && input.includes('@')) {
             return bot.sendMessage(chatId, 
-              '⚠️ *Вы ввели email адрес, но для 123RF нужен nickname (логин)*\n\n' +
-              '📝 **Nickname** - это ваше имя пользователя на сайте 123RF, которое вы видите в профиле.\n' +
-              '❌ **НЕ email** адрес (user@example.com)\n' +
-              '✅ **Nickname** (например: john_photographer)\n\n' +
-              'Попробуйте еще раз:', 
-              { parse_mode: 'Markdown' }
+              '⚠️ Вы ввели email адрес, но для 123RF нужен nickname (логин)\n\n' +
+              '📝 Nickname - это ваше имя пользователя на сайте 123RF, которое вы видите в профиле.\n' +
+              '❌ НЕ email адрес (user@example.com)\n' +
+              '✅ Nickname (например: john_photographer)\n\n' +
+              'Попробуйте еще раз:'
             );
           }
           
@@ -1003,17 +1001,17 @@ async function handleStockSetup(chatId, telegramUserId, userId, service) {
   
   let message;
   if (service === '123rf') {
-    message = `🔧 *Настройка ${serviceName}*
+    message = `🔧 Настройка ${serviceName}
 
 Для настройки потребуются данные от вашего аккаунта 123RF:
 
-👤 **Nickname (логин)** - это ваше имя пользователя на 123RF
+👤 Nickname (логин) - это ваше имя пользователя на 123RF
    ❌ НЕ email адрес (user@example.com)
    ✅ Nickname (например: john_photographer)
 
 Введите ваш nickname:`;
   } else {
-    message = `🔧 *Настройка ${serviceName}*
+    message = `🔧 Настройка ${serviceName}
 
 Для настройки ${serviceName} потребуются учетные данные.
 
@@ -1027,7 +1025,6 @@ async function handleStockSetup(chatId, telegramUserId, userId, service) {
   };
   
   await bot.sendMessage(chatId, message, { 
-    parse_mode: 'Markdown',
     reply_markup: keyboard
   });
 }
