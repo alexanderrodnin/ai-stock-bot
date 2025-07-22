@@ -200,14 +200,14 @@ https://yoomoney.ru/quickpay/confirm.xml?receiver=410011234567890&quickpay=shop&
 3. **Создание формы оплаты**
    - Перейдите в "Прием платежей" → "Форма оплаты"
    - Нажмите "Создать форму"
-   - Заполните:
+   - Укажите:
      - Название: "AI Stock Bot"
      - Описание: "Пополнение счета для генерации изображений"
      - Сумма: "Произвольная"
      - Валюта: "RUB"
      - Email уведомления: ваш email
 
-### Шаг 2: Настройка Gmail (10 минут)
+### Шаг 2: Настройка Gmail для Payment Monitor (10 минут)
 
 1. **Создание почты**
    - Создайте новый Gmail: `aistockbot.payments@gmail.com`
@@ -225,20 +225,450 @@ https://yoomoney.ru/quickpay/confirm.xml?receiver=410011234567890&quickpay=shop&
      - Subject: `Платеж получен`
      - Create filter → Apply label "YooMoney-Payments"
 
-### Шаг 3: Настройка переменных окружения
+### Шаг 3: Разработка Payment Monitor (30 минут)
 
+#### 3.1 Создание нового сервиса
 ```bash
-# Backend (.env)
-YOOMONEY_WALLET=410011234567890
-YOOMONEY_SHOP_ID=your_shop_id
-YOOMONEY_SCID=your_scid
-YOOMONEY_SECRET_KEY=your_secret_key
+mkdir payment-monitor
+cd payment-monitor
+npm init -y
+npm install imap dotenv axios node-cron
+```
 
-# Payment Monitor (.env)
+#### 3.2 Структура проекта
+```
+payment-monitor/
+├── src/
+│   ├── emailMonitor.js    # Мониторинг email
+│   ├── paymentParser.js   # Парсинг платежей
+│   ├── webhookService.js  # Отправка webhook
+│   └── logger.js         # Логирование
+├── .env
+├── index.js
+├── package.json
+└── Dockerfile
+```
+
+#### 3.3 Основной код сервиса
+```javascript
+// index.js
+const emailMonitor = require('./src/emailMonitor');
+const logger = require('./src/logger');
+
+async function start() {
+  logger.info('Starting Payment Monitor...');
+  await emailMonitor.start();
+}
+
+start().catch(error => {
+  logger.error('Failed to start Payment Monitor:', error);
+  process.exit(1);
+});
+```
+
+#### 3.4 Конфигурация (.env)
+```bash
+# Gmail settings
 GMAIL_USER=aistockbot.payments@gmail.com
-GMAIL_APP_PASSWORD=your_app_password
+GMAIL_APP_PASSWORD=your_app_password_here
+GMAIL_HOST=imap.gmail.com
+GMAIL_PORT=993
+
+# Backend settings
 BACKEND_URL=http://localhost:3000/api
+BACKEND_WEBHOOK_SECRET=your_webhook_secret
+
+# Monitor settings
 CHECK_INTERVAL=30000
+LOG_LEVEL=info
+```
+
+### Шаг 4: Изменения в Backend (45 минут)
+
+#### 4.1 Новые модели MongoDB
+```javascript
+// backend/src/models/Payment.js
+const mongoose = require('mongoose');
+
+const paymentSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  externalId: { type: String, required: true },
+  amount: { type: Number, required: true },
+  currency: { type: String, default: 'RUB' },
+  status: { 
+    type: String, 
+    enum: ['pending', 'completed', 'failed', 'expired'], 
+    default: 'pending' 
+  },
+  yoomoneyOperationId: String,
+  yoomoneyLabel: { type: String, unique: true, required: true },
+  emailNotification: mongoose.Schema.Types.Mixed,
+  metadata: mongoose.Schema.Types.Mixed,
+  expiresAt: { type: Date, default: () => new Date(Date.now() + 24 * 60 * 60 * 1000) },
+  createdAt: { type: Date, default: Date.now },
+  completedAt: Date
+});
+
+paymentSchema.index({ yoomoneyLabel: 1 });
+paymentSchema.index({ userId: 1, status: 1 });
+paymentSchema.index({ createdAt: 1 });
+
+module.exports = mongoose.model('Payment', paymentSchema);
+```
+
+```javascript
+// backend/src/models/Account.js
+const mongoose = require('mongoose');
+
+const accountSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', unique: true, required: true },
+  balance: { type: Number, default: 0, min: 0 },
+  currency: { type: String, default: 'RUB' },
+  transactions: [{
+    type: { type: String, enum: ['credit', 'debit'], required: true },
+    amount: { type: Number, required: true },
+    description: String,
+    paymentId: { type: mongoose.Schema.Types.ObjectId, ref: 'Payment' },
+    metadata: mongoose.Schema.Types.Mixed,
+    createdAt: { type: Date, default: Date.now }
+  }],
+  updatedAt: { type: Date, default: Date.now }
+});
+
+accountSchema.methods.addTransaction = function(type, amount, description, paymentId = null) {
+  this.transactions.push({
+    type,
+    amount,
+    description,
+    paymentId,
+    createdAt: new Date()
+  });
+  
+  if (type === 'credit') {
+    this.balance += amount;
+  } else if (type === 'debit') {
+    this.balance -= amount;
+  }
+  
+  this.updatedAt = new Date();
+  return this.save();
+};
+
+module.exports = mongoose.model('Account', accountSchema);
+```
+
+#### 4.2 Новые API endpoints
+```javascript
+// backend/src/routes/payments.js
+const express = require('express');
+const router = express.Router();
+const paymentController = require('../controllers/paymentController');
+const { authenticate } = require('../middleware/auth');
+
+// Создание платежа
+router.post('/create', authenticate, paymentController.createPayment);
+
+// Webhook для Payment Monitor
+router.post('/webhook', paymentController.handleWebhook);
+
+// Получение истории платежей
+router.get('/history', authenticate, paymentController.getPaymentHistory);
+
+// Получение текущего баланса
+router.get('/balance', authenticate, paymentController.getBalance);
+
+module.exports = router;
+```
+
+#### 4.3 Сервисы
+```javascript
+// backend/src/services/paymentService.js
+const Payment = require('../models/Payment');
+const Account = require('../models/Account');
+const User = require('../models/User');
+const crypto = require('crypto');
+
+class PaymentService {
+  async createPayment(userId, amount) {
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+
+    const label = `ai_bot_${userId}_${Date.now()}`;
+    
+    const payment = new Payment({
+      userId,
+      externalId: user.externalId,
+      amount,
+      yoomoneyLabel: label
+    });
+
+    await payment.save();
+    
+    return {
+      paymentId: payment._id,
+      yoomoneyUrl: this.generateYooMoneyUrl(label, amount),
+      label
+    };
+  }
+
+  async confirmPayment(label, operationId, amount) {
+    const payment = await Payment.findOne({ yoomoneyLabel: label });
+    if (!payment) throw new Error('Payment not found');
+
+    if (payment.status !== 'pending') {
+      throw new Error('Payment already processed');
+    }
+
+    if (payment.amount !== amount) {
+      throw new Error('Amount mismatch');
+    }
+
+    payment.status = 'completed';
+    payment.yoomoneyOperationId = operationId;
+    payment.completedAt = new Date();
+    await payment.save();
+
+    // Зачисление средств на баланс
+    let account = await Account.findOne({ userId: payment.userId });
+    if (!account) {
+      account = new Account({ userId: payment.userId });
+    }
+
+    await account.addTransaction('credit', amount, 'Пополнение счета', payment._id);
+    
+    return payment;
+  }
+
+  generateYooMoneyUrl(label, amount) {
+    const params = new URLSearchParams({
+      receiver: process.env.YOOMONEY_WALLET,
+      quickpay: 'shop',
+      targets: 'Пополнение счета AI Stock Bot',
+      paymentType: 'SB',
+      sum: amount.toString(),
+      label: label,
+      successURL: `https://t.me/${process.env.TELEGRAM_BOT_USERNAME}`
+    });
+
+    return `https://yoomoney.ru/quickpay/confirm.xml?${params.toString()}`;
+  }
+
+  async getPaymentHistory(userId, limit = 20, skip = 0) {
+    return Payment.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .skip(skip);
+  }
+
+  async getBalance(userId) {
+    let account = await Account.findOne({ userId });
+    if (!account) {
+      account = new Account({ userId, balance: 0 });
+      await account.save();
+    }
+    return account;
+  }
+}
+
+module.exports = new PaymentService();
+```
+
+### Шаг 5: Изменения в Telegram Bot (30 минут)
+
+#### 5.1 Новые команды
+```javascript
+// tg-bot/services/paymentService.js
+const axios = require('axios');
+
+class PaymentService {
+  constructor(backendUrl) {
+    this.backendUrl = backendUrl;
+  }
+
+  async createPayment(userId, amount) {
+    try {
+      const response = await axios.post(`${this.backendUrl}/payments/create`, {
+        amount: parseInt(amount)
+      }, {
+        headers: { 'X-User-Id': userId }
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to create payment: ${error.message}`);
+    }
+  }
+
+  async getBalance(userId) {
+    try {
+      const response = await axios.get(`${this.backendUrl}/payments/balance`, {
+        headers: { 'X-User-Id': userId }
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to get balance: ${error.message}`);
+    }
+  }
+
+  async getPaymentHistory(userId, limit = 10) {
+    try {
+      const response = await axios.get(`${this.backendUrl}/payments/history?limit=${limit}`, {
+        headers: { 'X-User-Id': userId }
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(`Failed to get payment history: ${error.message}`);
+    }
+  }
+}
+
+module.exports = PaymentService;
+```
+
+#### 5.2 Обработчики команд
+```javascript
+// tg-bot/index.js - добавление новых команд
+const PaymentService = require('./services/paymentService');
+const paymentService = new PaymentService(process.env.BACKEND_API_URL);
+
+// Команда пополнения баланса
+bot.onText(/\/topup(?:\s+(\d+))?/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const amount = match[1];
+
+  if (!amount || amount < 10 || amount > 10000) {
+    return bot.sendMessage(chatId, 
+      '❌ Укажите сумму от 10 до 10000 рублей\nПример: /topup 100');
+  }
+
+  try {
+    const payment = await paymentService.createPayment(userId, amount);
+    
+    const keyboard = {
+      inline_keyboard: [[
+        { text: "💳 Оплатить", url: payment.yoomoneyUrl }
+      ]]
+    };
+
+    await bot.sendMessage(chatId, 
+      `💰 Пополнение счета на ${amount}₽\n\n` +
+      `🔗 Нажмите кнопку ниже для оплаты:\n` +
+      `⚡ После оплаты средства автоматически зачислятся на ваш счет`,
+      { reply_markup: keyboard }
+    );
+  } catch (error) {
+    bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+  }
+});
+
+// Команда проверки баланса
+bot.onText(/\/balance/, async (msg) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+
+  try {
+    const balance = await paymentService.getBalance(userId);
+    bot.sendMessage(chatId, 
+      `💰 Ваш баланс: ${balance.balance}₽\n\n` +
+      `Для пополнения используйте: /topup [сумма]`
+    );
+  } catch (error) {
+    bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+  }
+});
+
+// Команда истории платежей
+bot.onText(/\/history(?:\s+(\d+))?/, async (msg, match) => {
+  const chatId = msg.chat.id;
+  const userId = msg.from.id;
+  const limit = match[1] || 5;
+
+  try {
+    const history = await paymentService.getPaymentHistory(userId, limit);
+    
+    if (history.data.payments.length === 0) {
+      return bot.sendMessage(chatId, '📊 История платежей пуста');
+    }
+
+    let message = '📊 История платежей:\n\n';
+    history.data.payments.forEach(payment => {
+      const status = payment.status === 'completed' ? '✅' : '⏳';
+      const date = new Date(payment.createdAt).toLocaleDateString('ru-RU');
+      message += `${status} ${date} - ${payment.amount}₽\n`;
+    });
+
+    bot.sendMessage(chatId, message);
+  } catch (error) {
+    bot.sendMessage(chatId, `❌ Ошибка: ${error.message}`);
+  }
+});
+```
+
+### Шаг 6: Обновление деплоймента (15 минут)
+
+#### 6.1 Docker Compose обновление
+```yaml
+# docker-compose.yml - добавление payment-monitor
+version: '3.8'
+services:
+  payment-monitor:
+    build: ./payment-monitor
+    container_name: ai-stock-bot-payment-monitor
+    environment:
+      - GMAIL_USER=${GMAIL_USER}
+      - GMAIL_APP_PASSWORD=${GMAIL_APP_PASSWORD}
+      - BACKEND_URL=http://backend:3000/api
+      - CHECK_INTERVAL=30000
+      - LOG_LEVEL=info
+    depends_on:
+      - backend
+    restart: unless-stopped
+    networks:
+      - ai-stock-bot-network
+
+  backend:
+    # ... существующая конфигурация
+    environment:
+      # ... существующие переменные
+      - YOOMONEY_WALLET=${YOOMONEY_WALLET}
+```
+
+#### 6.2 Dockerfile для Payment Monitor
+```dockerfile
+# payment-monitor/Dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+
+CMD ["node", "index.js"]
+```
+
+#### 6.3 Переменные окружения
+```bash
+# .env.prod - добавление новых переменных
+# YooMoney settings
+YOOMONEY_WALLET=410011234567890
+
+# Gmail settings
+GMAIL_USER=aistockbot.payments@gmail.com
+GMAIL_APP_PASSWORD=your_app_password_here
+
+# Payment Monitor settings
+CHECK_INTERVAL=30000
+```
+
+#### 6.4 Перезапуск сервисов
+```bash
+# Пересборка и запуск с новым сервисом
+docker-compose -f docker-compose-prod.yml --env-file .env.prod up -d --build
+
+# Проверка логов
+docker-compose logs -f payment-monitor
 ```
 
 ## 🔍 Архитектура обработки ошибок
@@ -275,6 +705,19 @@ docker-compose logs payment-monitor | grep "Connected to Gmail"
 curl http://localhost:3000/api/payments?limit=5
 ```
 
+## 🛡️ Безопасность и соответствие
+
+### Защита данных
+- **Шифрование**: Все чувствительные данные шифруются в БД
+- **Rate limiting**: Ограничение на количество платежей
+- **Валидация**: Проверка всех входных данных
+- **Логирование**: Полная история операций
+
+### Соответствие требованиям
+- **YooMoney TOS**: Соответствие условиям использования
+- **GDPR**: Защита персональных данных
+- **ФЗ-115**: Требования к идентификации пользователей
+
 ## 📈 Масштабирование и будущее развитие
 
 ### Фаза 1: Базовая реализация (текущая)
@@ -291,19 +734,6 @@ curl http://localhost:3000/api/payments?limit=5
 - Подписки с автоматическим продлением
 - Групповые платежи
 - Аналитика доходов
-
-## 🛡️ Безопасность и соответствие
-
-### Защита данных
-- **Шифрование**: Все чувствительные данные шифруются в БД
-- **Rate limiting**: Ограничение на количество платежей
-- **Валидация**: Проверка всех входных данных
-- **Логирование**: Полная история операций
-
-### Соответствие требованиям
-- **YooMoney TOS**: Соответствие условиям использования
-- **GDPR**: Защита персональных данных
-- **ФЗ-115**: Требования к идентификации пользователей
 
 ## 📞 Поддержка и устранение неполадок
 
