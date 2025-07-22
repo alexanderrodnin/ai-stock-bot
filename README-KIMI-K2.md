@@ -182,15 +182,30 @@ FTP_HOST=ftp.123rf.com
 FTP_USER=your_ftp_username
 FTP_PASSWORD=your_ftp_password
 FTP_REMOTE_PATH=/ai_image
+FTP_PORT=21
+FTP_SECURE=false
+FTP_TIMEOUT=30000
 
 # Безопасность
-JWT_SECRET=your_jwt_secret
-ENCRYPTION_KEY=your_32_character_key
+JWT_SECRET=your_jwt_secret_key_minimum_32_characters
+ENCRYPTION_SECRET_KEY=your_32_character_encryption_key
 RATE_LIMIT_MAX=100
 RATE_LIMIT_WINDOW=900000
 
 # Логирование
 LOG_LEVEL=info
+LOG_FORMAT=combined
+
+# Дополнительные настройки
+TEMP_DIR=./temp
+MAX_FILE_SIZE=10485760
+CLEANUP_INTERVAL=86400000
+ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3001
+DEFAULT_AI_MODEL=juggernaut-pro-flux
+AI_HEALTH_CHECK_INTERVAL=300000
+AI_MAX_RETRIES=2
+AI_RETRY_DELAY=1000
+AI_BACKOFF_MULTIPLIER=2
 ```
 
 ## 📊 API Документация
