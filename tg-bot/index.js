@@ -209,9 +209,15 @@ bot.onText(/\/start/, async (msg) => {
     
     const welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
 
-Я помогу вам генерировать изображения с помощью DALL·E 3 и загружать их на стоковую площадку 123RF.
+Я помогу вам генерировать изображения с помощью современных AI моделей и загружать их на стоковую площадку 123RF.
 
-*Возможности:*
+*🤖 Доступные AI модели:*
+• Juggernaut Pro Flux (по умолчанию)
+• DALL-E 3 (OpenAI)
+• Seedream V3
+• HiDream-I1 Fast
+
+*📤 Возможности:*
 • Генерация изображений по текстовому описанию
 • Автоматическая загрузка на 123RF
 • Управление настройками стокового сервиса
@@ -248,6 +254,12 @@ bot.onText(/\/help/, (msg) => {
   const chatId = msg.chat.id;
   const helpMessage = `📖 *Справка по использованию*
 
+*🤖 AI Модели:*
+• **Juggernaut Pro Flux** (по умолчанию) - профессиональные реалистичные изображения
+• **DALL-E 3** (OpenAI) - высококачественная генерация с отличным пониманием промптов
+• **Seedream V3** - художественная и креативная генерация
+• **HiDream-I1 Fast** - быстрая высококачественная генерация
+
 *Генерация изображений:*
 1. Отправьте текстовое описание изображения
 2. Дождитесь генерации (может занять до 30 секунд)
@@ -255,7 +267,7 @@ bot.onText(/\/help/, (msg) => {
 
 *Настройка стоков:*
 • Используйте /mystocks для управления сервисом 123RF
-• Нужны учетные данные от аккаунта 123RF
+• Нужны **nickname** (не email!) и пароль от аккаунта 123RF
 • Можно настроить автоматическую загрузку
 
 *Ограничения:*
@@ -610,6 +622,18 @@ async function handleSetupStep(msg, session) {
             return bot.sendMessage(chatId, '❌ Логин не может быть пустым. Попробуйте еще раз:');
           }
           
+          // Check if user entered email instead of nickname for 123RF
+          if (session.service === '123rf' && input.includes('@')) {
+            return bot.sendMessage(chatId, 
+              '⚠️ *Вы ввели email адрес, но для 123RF нужен nickname (логин)*\n\n' +
+              '📝 **Nickname** - это ваше имя пользователя на сайте 123RF, которое вы видите в профиле.\n' +
+              '❌ **НЕ email** адрес (user@example.com)\n' +
+              '✅ **Nickname** (например: john_photographer)\n\n' +
+              'Попробуйте еще раз:', 
+              { parse_mode: 'Markdown' }
+            );
+          }
+          
           session.data.username = input;
           session.step = 'password';
           
@@ -848,24 +872,55 @@ async function saveStockServiceSettings(chatId, telegramUserId, userId, session)
         
         await bot.sendMessage(chatId, successMessage, { parse_mode: 'Markdown' });
       } else {
-        let warningMessage;
-        if (session.action === 'edit_stock') {
-          warningMessage = `⚠️ *Данные ${serviceName} обновлены, но есть проблемы с соединением*
-
-Настройки сохранены, но тест соединения не прошел:
-${testResult.message || 'Неизвестная ошибка'}
-
-Проверьте настройки и попробуйте позже.`;
+        // Analyze error type and provide specific guidance
+        let errorMessage = `⚠️ *Не удалось подключиться к ${serviceName}*\n\n`;
+        const errorText = testResult.error || testResult.message || 'Неизвестная ошибка';
+        
+        if (errorText.includes('Authentication failed') || 
+            errorText.includes('Login incorrect') ||
+            errorText.includes('530') ||
+            errorText.includes('Login authentication failed')) {
+          errorMessage += `🔐 **Проблема с данными входа:**\n`;
+          if (session.service === '123rf') {
+            errorMessage += `• Проверьте nickname (не email!)\n`;
+            errorMessage += `• Убедитесь, что вводите именно nickname, а не email адрес\n`;
+          } else {
+            errorMessage += `• Проверьте логин\n`;
+          }
+          errorMessage += `• Проверьте пароль\n`;
+          errorMessage += `• Убедитесь, что аккаунт активен на ${serviceName}\n\n`;
+          errorMessage += `💡 **Подсказка:** Nickname - это ваше имя пользователя, которое отображается в профиле на сайте ${serviceName}.`;
+        } else if (errorText.includes('Connection refused') || 
+                   errorText.includes('timeout') ||
+                   errorText.includes('ECONNREFUSED') ||
+                   errorText.includes('ETIMEDOUT')) {
+          errorMessage += `🌐 **Проблема с соединением:**\n`;
+          errorMessage += `• Проверьте интернет-соединение\n`;
+          errorMessage += `• Попробуйте позже\n`;
+          errorMessage += `• Возможно, сервер ${serviceName} временно недоступен`;
+        } else if (errorText.includes('Host not found') || 
+                   errorText.includes('ENOTFOUND')) {
+          errorMessage += `🌐 **Проблема с хостом:**\n`;
+          errorMessage += `• Проверьте настройки FTP хоста\n`;
+          errorMessage += `• Убедитесь в правильности адреса сервера`;
         } else {
-          warningMessage = `⚠️ *${serviceName} настроен, но есть проблемы с соединением*
-
-Настройки сохранены, но тест соединения не прошел:
-${testResult.message || 'Неизвестная ошибка'}
-
-Проверьте настройки и попробуйте позже.`;
+          errorMessage += `❌ **Ошибка:** ${errorText}\n\n`;
+          errorMessage += `🔧 **Рекомендации:**\n`;
+          if (session.service === '123rf') {
+            errorMessage += `• Убедитесь, что используете nickname, а не email\n`;
+          }
+          errorMessage += `• Проверьте правильность всех данных\n`;
+          errorMessage += `• Попробуйте позже`;
         }
         
-        await bot.sendMessage(chatId, warningMessage, { parse_mode: 'Markdown' });
+        let finalMessage;
+        if (session.action === 'edit_stock') {
+          finalMessage = `⚠️ *Данные ${serviceName} обновлены, но есть проблемы с соединением*\n\n${errorMessage}`;
+        } else {
+          finalMessage = `⚠️ *${serviceName} настроен, но есть проблемы с соединением*\n\n${errorMessage}`;
+        }
+        
+        await bot.sendMessage(chatId, finalMessage, { parse_mode: 'Markdown' });
       }
     } catch (testError) {
       await bot.deleteMessage(chatId, savingMessage.message_id);
@@ -921,11 +976,24 @@ async function handleStockSetup(chatId, telegramUserId, userId, service) {
     data: {}
   });
   
-  const message = `🔧 *Настройка ${serviceName}*
+  let message;
+  if (service === '123rf') {
+    message = `🔧 *Настройка ${serviceName}*
+
+Для настройки потребуются данные от вашего аккаунта 123RF:
+
+👤 **Nickname (логин)** - это ваше имя пользователя на 123RF
+   ❌ НЕ email адрес (user@example.com)
+   ✅ Nickname (например: john_photographer)
+
+Введите ваш nickname:`;
+  } else {
+    message = `🔧 *Настройка ${serviceName}*
 
 Для настройки ${serviceName} потребуются учетные данные.
 
 👤 Введите ваш логин для ${serviceName}:`;
+  }
 
   const keyboard = {
     inline_keyboard: [
