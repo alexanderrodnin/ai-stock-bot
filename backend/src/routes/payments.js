@@ -6,16 +6,16 @@
 const express = require('express');
 const router = express.Router();
 const paymentController = require('../controllers/paymentController');
-const rateLimiter = require('../middleware/rateLimiter');
+const rateLimit = require('express-rate-limit');
 
 // Rate limiting for payment operations
-const paymentLimiter = rateLimiter({
+const paymentLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 10, // 10 payment operations per 15 minutes
   message: 'Слишком много попыток создания платежей. Попробуйте позже.'
 });
 
-const webhookLimiter = rateLimiter({
+const webhookLimiter = rateLimit({
   windowMs: 1 * 60 * 1000, // 1 minute
   max: 100, // 100 webhook calls per minute
   message: 'Too many webhook requests'
