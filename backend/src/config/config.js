@@ -106,6 +106,27 @@ const config = {
     secretKey: process.env.ENCRYPTION_SECRET_KEY || process.env.JWT_SECRET || 'your-encryption-secret-key'
   },
 
+  // YooMoney payment configuration
+  yoomoney: {
+    wallet: process.env.YOOMONEY_WALLET,
+    notificationSecret: process.env.YOOMONEY_NOTIFICATION_SECRET,
+    quickpayUrl: process.env.YOOMONEY_QUICKPAY_URL || 'https://yoomoney.ru/quickpay/confirm.xml',
+    webhookUrl: process.env.PAYMENT_WEBHOOK_URL
+  },
+
+  // Application base URL
+  app: {
+    baseUrl: process.env.BACKEND_URL || 'http://localhost:3000'
+  },
+
+  // Payment plans configuration
+  paymentPlans: {
+    plan_10: { amount: 2, images: 10, name: "10 изображений" },
+    plan_100: { amount: 3, images: 100, name: "100 изображений" },
+    plan_1000: { amount: 4, images: 1000, name: "1000 изображений" },
+    plan_10000: { amount: 5, images: 10000, name: "10000 изображений" }
+  },
+
   // AI Models configuration
   aiModels: {
     // Default AI model (changed from dall-e-3 to juggernaut-pro-flux)

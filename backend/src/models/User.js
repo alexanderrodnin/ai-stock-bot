@@ -266,9 +266,27 @@ const userSchema = new mongoose.Schema({
   subscription: {
     plan: {
       type: String,
-      enum: ['free', 'basic', 'pro', 'enterprise'],
+      enum: ['free', 'plan_10', 'plan_100', 'plan_1000', 'plan_10000'],
       default: 'free'
     },
+    imagesRemaining: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    isActive: {
+      type: Boolean,
+      default: false
+    },
+    purchasedAt: {
+      type: Date,
+      default: null
+    },
+    lastPaymentId: {
+      type: String,
+      default: null
+    },
+    // Legacy fields for backward compatibility
     limits: {
       imagesPerDay: {
         type: Number,
@@ -295,6 +313,38 @@ const userSchema = new mongoose.Schema({
     }
   },
 
+  // Payment history
+  paymentHistory: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Payment'
+  }],
+
+  // Transaction history
+  transactions: [{
+    type: {
+      type: String,
+      enum: ['credit', 'debit'],
+      required: true
+    },
+    amount: {
+      type: Number,
+      required: true
+    },
+    description: {
+      type: String,
+      required: true
+    },
+    paymentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Payment',
+      default: null
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
+
   // Metadata
   metadata: {
     ipAddress: String,
@@ -315,6 +365,10 @@ userSchema.index({ 'profile.username': 1 }, { sparse: true });
 userSchema.index({ status: 1 });
 userSchema.index({ createdAt: -1 });
 userSchema.index({ 'stats.lastActivity': -1 });
+// Payment-related indexes
+userSchema.index({ 'subscription.isActive': 1 });
+userSchema.index({ 'subscription.plan': 1 });
+userSchema.index({ 'subscription.imagesRemaining': 1 });
 
 // Virtual for full name
 userSchema.virtual('profile.fullName').get(function() {
