@@ -1,5 +1,4 @@
 const crypto = require('crypto');
-const axios = require('axios');
 const Payment = require('../models/Payment');
 const User = require('../models/User');
 const WebhookLog = require('../models/WebhookLog');
@@ -25,93 +24,25 @@ function generatePaymentId(telegramId) {
 }
 
 /**
- * Создание платежа через YooMoney API
+ * Генерация URL для оплаты YooMoney QuickPay
  */
-async function createYooMoneyPayment(paymentId, planType, telegramId) {
+function generateYooMoneyPaymentUrl(paymentId, planType, telegramId) {
   const plan = PAYMENT_PLANS[planType];
   if (!plan) {
     throw new Error(`Invalid plan type: ${planType}`);
   }
 
-  try {
-    // Создание платежа через YooMoney API
-    const paymentData = {
-      amount: {
-        value: plan.amount.toFixed(2),
-        currency: 'RUB'
-      },
-      confirmation: {
-        type: 'redirect',
-        return_url: `${config.yoomoney.returnUrl}?paymentId=${paymentId}`
-      },
-      capture: true,
-      description: `Оплата тарифа: ${plan.name}`,
-      metadata: {
-        paymentId,
-        telegramId: telegramId.toString(),
-        planType,
-        imagesCount: plan.images.toString()
-      }
-    };
+  const params = new URLSearchParams({
+    receiver: config.yoomoney.wallet,
+    'quickpay-form': 'donate',
+    targets: `Оплата тарифа: ${plan.name}`,
+    paymentType: 'AC',
+    sum: plan.amount,
+    label: paymentId,
+    successURL: `${config.app.baseUrl}/api/payments/success?paymentId=${paymentId}`
+  });
 
-    const response = await axios.post(
-      `${config.yoomoney.apiUrl}/payments`,
-      paymentData,
-      {
-        headers: {
-          'Authorization': `Basic ${Buffer.from(`${config.yoomoney.shopId}:${config.yoomoney.secretKey}`).toString('base64')}`,
-          'Content-Type': 'application/json',
-          'Idempotence-Key': paymentId
-        },
-        timeout: 30000
-      }
-    );
-
-    if (response.data && response.data.confirmation) {
-      return {
-        yoomoneyPaymentId: response.data.id,
-        paymentUrl: response.data.confirmation.confirmation_url,
-        status: response.data.status
-      };
-    } else {
-      throw new Error('Invalid response from YooMoney API');
-    }
-
-  } catch (error) {
-    logger.error('Error creating YooMoney payment', {
-      error: error.message,
-      response: error.response?.data,
-      paymentId,
-      planType
-    });
-    throw new Error(`Failed to create YooMoney payment: ${error.message}`);
-  }
-}
-
-/**
- * Проверка статуса платежа в YooMoney
- */
-async function checkYooMoneyPaymentStatus(yoomoneyPaymentId) {
-  try {
-    const response = await axios.get(
-      `${config.yoomoney.apiUrl}/payments/${yoomoneyPaymentId}`,
-      {
-        headers: {
-          'Authorization': `Basic ${Buffer.from(`${config.yoomoney.shopId}:${config.yoomoney.secretKey}`).toString('base64')}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
-
-    return response.data;
-  } catch (error) {
-    logger.error('Error checking YooMoney payment status', {
-      error: error.message,
-      yoomoneyPaymentId
-    });
-    throw error;
-  }
+  return `${config.yoomoney.quickpayUrl}?${params.toString()}`;
 }
 
 /**
@@ -123,7 +54,7 @@ function verifyWebhookSignature(data) {
     datetime, sender, codepro, label, sha1_hash
   } = data;
 
-  const hashString = `${notification_type}&${operation_id}&${amount}&${currency}&${datetime}&${sender}&${codepro}&${config.yoomoney.notificationSecret}&${label || ''}`;
+  const hashString = `${notification_type}&${operation_id}&${amount}&${currency}&${datetime}&${sender}&${codepro}&${config.yoomoney.webhookSecret}&${label || ''}`;
   
   const calculatedHash = crypto
     .createHash('sha1')
@@ -161,7 +92,13 @@ async function createPayment(userId, planType, telegramId) {
       logger.info('Active payment found', { paymentId: activePay.paymentId, telegramId });
       return {
         success: true,
-        payment: activePay,
+        payment: {
+          paymentId: activePay.paymentId,
+          paymentUrl: activePay.paymentUrl,
+          amount: activePay.amount,
+          imagesCount: activePay.imagesCount,
+          expiresAt: activePay.expiresAt
+        },
         message: 'Активный платеж уже существует'
       };
     }
@@ -183,12 +120,9 @@ async function createPayment(userId, planType, telegramId) {
       expiresAt: new Date(Date.now() + 60 * 60 * 1000) // 1 час
     });
 
-    // Создание платежа через YooMoney API
-    const yoomoneyResult = await createYooMoneyPayment(paymentId, planType, telegramId);
-    
-    payment.paymentUrl = yoomoneyResult.paymentUrl;
-    payment.yoomoneyPaymentId = yoomoneyResult.yoomoneyPaymentId;
-    payment.yoomoneyStatus = yoomoneyResult.status;
+    // Генерация URL для оплаты
+    const paymentUrl = generateYooMoneyPaymentUrl(paymentId, planType, telegramId);
+    payment.paymentUrl = paymentUrl;
 
     await payment.save();
 
@@ -197,8 +131,7 @@ async function createPayment(userId, planType, telegramId) {
       telegramId,
       userId: user._id,
       planType,
-      amount: plan.amount,
-      yoomoneyPaymentId: yoomoneyResult.yoomoneyPaymentId
+      amount: plan.amount
     });
 
     return {
@@ -474,8 +407,7 @@ async function checkPendingPayments() {
 module.exports = {
   PAYMENT_PLANS,
   generatePaymentId,
-  createYooMoneyPayment,
-  checkYooMoneyPaymentStatus,
+  generateYooMoneyPaymentUrl,
   verifyWebhookSignature,
   createPayment,
   processWebhook,

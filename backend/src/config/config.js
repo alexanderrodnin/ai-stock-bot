@@ -108,12 +108,12 @@ const config = {
 
   // YooMoney payment configuration
   yoomoney: {
-    shopId: process.env.YOOMONEY_SHOP_ID,
-    secretKey: process.env.YOOMONEY_SECRET_KEY,
-    apiUrl: process.env.YOOMONEY_API_URL || 'https://api.yookassa.ru/v3',
-    returnUrl: process.env.YOOMONEY_RETURN_URL,
-    notificationSecret: process.env.YOOMONEY_NOTIFICATION_SECRET,
-    webhookUrl: process.env.PAYMENT_WEBHOOK_URL
+    clientId: process.env.YOOMONEY_CLIENT_ID,
+    wallet: process.env.YOOMONEY_WALLET,
+    apiUrl: process.env.YOOMONEY_API_URL || 'https://yoomoney.ru/api',
+    quickpayUrl: process.env.YOOMONEY_QUICKPAY_URL || 'https://yoomoney.ru/quickpay/confirm.xml',
+    webhookSecret: process.env.YOOMONEY_WEBHOOK_SECRET,
+    notificationUri: process.env.YOOMONEY_NOTIFICATION_URI
   },
 
   // Application base URL
