@@ -260,11 +260,22 @@ bot.onText(/\/start/, async (msg) => {
         { parse_mode: 'Markdown' }
       );
       return showStockSetupMenu(chatId, user.id);
-    } else {
-      await bot.sendMessage(chatId, 
-        '\n✅ Стоковые сервисы настроены. Отправьте текстовое описание изображения для начала работы!'
-      );
     }
+
+    // Check if user has active subscription
+    const subscription = await backendApi.getUserSubscription(user.id);
+    if (!subscription.isActive || subscription.imagesRemaining <= 0) {
+      await bot.sendMessage(chatId, 
+        '💳 *Необходимо оплатить тариф*\n\nДля генерации изображений нужно приобрести один из доступных тарифов.',
+        { parse_mode: 'Markdown' }
+      );
+      return showPaymentPlans(chatId, user.id, msg.from.id);
+    }
+
+    // Both stocks and subscription are ready
+    await bot.sendMessage(chatId, 
+      `✅ Всё готово к работе!\n\n💰 **Баланс:** ${subscription.imagesRemaining} изображений\n\nОтправьте текстовое описание изображения для начала работы!`
+    );
   } catch (error) {
     console.error('Error in /start command:', error.message);
     await bot.sendMessage(chatId, 
@@ -478,7 +489,17 @@ bot.on('message', async (msg) => {
       return showStockSetupMenu(chatId, user.id);
     }
 
-    // Only start processing if user has active stocks
+    // Check if user has active subscription BEFORE starting generation
+    const subscription = await backendApi.getUserSubscription(user.id);
+    if (!subscription.isActive || subscription.imagesRemaining <= 0) {
+      await bot.sendMessage(chatId, 
+        '💳 *Необходимо оплатить тариф*\n\nДля генерации изображений нужно приобрести один из доступных тарифов.',
+        { parse_mode: 'Markdown' }
+      );
+      return showPaymentPlans(chatId, user.id, msg.from.id);
+    }
+
+    // Only start processing if user has active stocks AND subscription
     const processingMessage = await bot.sendMessage(chatId, '🎨 Генерирую изображение, пожалуйста подождите...');
 
     try {
@@ -562,6 +583,22 @@ bot.on('message', async (msg) => {
           { parse_mode: 'Markdown' }
         );
         return showStockSetupMenu(chatId, user.id);
+      } else if (error.message.includes('SUBSCRIPTION_REQUIRED')) {
+        // User needs to pay for subscription
+        await bot.deleteMessage(chatId, processingMessage.message_id);
+        await bot.sendMessage(chatId, 
+          '💳 *Необходимо оплатить тариф*\n\nДля генерации изображений нужно приобрести один из доступных тарифов.',
+          { parse_mode: 'Markdown' }
+        );
+        return showPaymentPlans(chatId, user.id, msg.from.id);
+      } else if (error.message.includes('NO_IMAGES_REMAINING')) {
+        // User has subscription but no images left
+        await bot.deleteMessage(chatId, processingMessage.message_id);
+        await bot.sendMessage(chatId, 
+          '📊 *Изображения закончились*\n\nУ вас закончились изображения. Необходимо пополнить баланс.',
+          { parse_mode: 'Markdown' }
+        );
+        return showPaymentPlans(chatId, user.id, msg.from.id);
       } else if (error.message.includes('Backend health check failed')) {
         errorMessage += 'Сервис временно недоступен.';
       } else if (error.message.includes('Failed to generate image')) {

@@ -8,7 +8,7 @@ const { body, param, query } = require('express-validator');
 const imageController = require('../controllers/imageController');
 const { imageGenerationLimiter } = require('../middleware/rateLimiter');
 const { asyncHandler } = require('../middleware/errorHandler');
-const { checkSubscriptionSoft, decrementImageCount } = require('../middleware/subscriptionCheck');
+const { checkSubscription, decrementImageCount } = require('../middleware/subscriptionCheck');
 
 const router = express.Router();
 
@@ -105,7 +105,7 @@ const validateUploadSettings = [
 router.post('/generate', 
   // imageGenerationLimiter, // Temporarily disabled for testing
   validateImageGeneration,
-  checkSubscriptionSoft,
+  checkSubscription,
   decrementImageCount,
   asyncHandler(imageController.generateImage)
 );

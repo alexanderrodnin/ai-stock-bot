@@ -200,8 +200,16 @@ class BackendApiService {
       console.error('Error generating image:', error.message);
       
       // Check for specific error codes
-      if (error.response?.data?.error?.code === 'NO_ACTIVE_STOCK_SERVICES') {
+      if (error.response?.data?.error === 'NO_ACTIVE_STOCK_SERVICES') {
         throw new Error('NO_ACTIVE_STOCK_SERVICES');
+      }
+      
+      if (error.response?.data?.error === 'SUBSCRIPTION_REQUIRED') {
+        throw new Error('SUBSCRIPTION_REQUIRED');
+      }
+      
+      if (error.response?.data?.error === 'NO_IMAGES_REMAINING') {
+        throw new Error('NO_IMAGES_REMAINING');
       }
       
       throw new Error(`Failed to generate image: ${error.message}`);
