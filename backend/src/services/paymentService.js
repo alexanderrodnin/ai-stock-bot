@@ -204,14 +204,35 @@ async function processWebhook(webhookData) {
       return { success: true, message: 'Payment already processed' };
     }
 
-    // Проверка суммы
-    if (parseFloat(amount) !== payment.amount) {
-      logger.error('Payment amount mismatch', {
-        expected: payment.amount,
-        received: amount,
+    // Проверка суммы с допустимым диапазоном ±3% (учитывает комиссию YooMoney)
+    const receivedAmount = parseFloat(amount);
+    const expectedAmount = payment.amount;
+    const tolerance = 0.03; // 3% tolerance for YooMoney fees
+    
+    const minAcceptableAmount = expectedAmount * (1 - tolerance); // 97%
+    const maxAcceptableAmount = expectedAmount * (1 + tolerance); // 103%
+    
+    logger.info('Payment amount validation', {
+      expected: expectedAmount,
+      received: receivedAmount,
+      difference: receivedAmount - expectedAmount,
+      percentageDifference: ((receivedAmount - expectedAmount) / expectedAmount * 100).toFixed(2) + '%',
+      minAcceptable: minAcceptableAmount,
+      maxAcceptable: maxAcceptableAmount,
+      withinRange: receivedAmount >= minAcceptableAmount && receivedAmount <= maxAcceptableAmount,
+      paymentId: payment.paymentId
+    });
+    
+    if (receivedAmount < minAcceptableAmount || receivedAmount > maxAcceptableAmount) {
+      logger.error('Payment amount out of acceptable range', {
+        expected: expectedAmount,
+        received: receivedAmount,
+        minAcceptable: minAcceptableAmount,
+        maxAcceptable: maxAcceptableAmount,
+        tolerance: `±${(tolerance * 100)}%`,
         paymentId: payment.paymentId
       });
-      throw new Error('Payment amount mismatch');
+      throw new Error(`Payment amount out of range: received ${receivedAmount}, expected ${expectedAmount} ±${(tolerance * 100)}%`);
     }
 
     // Обновление статуса платежа
