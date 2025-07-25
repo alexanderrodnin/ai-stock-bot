@@ -294,6 +294,11 @@ bot.onText(/\/help/, (msg) => {
 • Нужны **nickname** (не email!) и пароль от аккаунта 123RF
 • Можно настроить автоматическую загрузку
 
+*Подписка и оплата:*
+• Используйте /balance для проверки баланса изображений
+• Используйте /buy для покупки изображений
+• Доступны тарифы: 10, 100, 1000, 10000 изображений
+
 *Ограничения:*
 • Промт должен быть текстовым и до 1000 символов
 • Изображения обрабатываются в формате 4000x4000 для загрузки
@@ -301,9 +306,67 @@ bot.onText(/\/help/, (msg) => {
 
 *Команды:*
 /start - начать работу
-/mystocks - управление стоковым сервисом`;
+/mystocks - управление стоковым сервисом
+/balance - проверить баланс изображений
+/buy - купить изображения`;
 
   bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+});
+
+// Balance command handler
+bot.onText(/\/balance/, async (msg) => {
+  const chatId = msg.chat.id;
+  
+  try {
+    const user = await initializeUser(msg.from);
+    const subscription = await backendApi.getUserSubscription(user.id);
+    
+    let message = `💰 *Ваш баланс*\n\n`;
+    
+    if (subscription.isActive) {
+      message += `✅ **Статус:** Активная подписка\n`;
+      message += `📊 **План:** ${subscription.plan}\n`;
+      message += `🖼️ **Осталось изображений:** ${subscription.imagesRemaining}\n`;
+      
+      if (subscription.expiresAt) {
+        const expiryDate = new Date(subscription.expiresAt);
+        message += `⏰ **Действует до:** ${expiryDate.toLocaleDateString('ru-RU')}\n`;
+      }
+    } else {
+      message += `❌ **Статус:** Подписка неактивна\n`;
+      message += `🖼️ **Изображений:** 0\n\n`;
+      message += `💡 Для генерации изображений необходимо приобрести тариф.`;
+    }
+    
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "💳 Купить изображения", callback_data: "buy_images" }],
+        [{ text: "📊 История платежей", callback_data: "payment_history" }]
+      ]
+    };
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+    
+  } catch (error) {
+    console.error('Error in /balance command:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка получения информации о балансе.');
+  }
+});
+
+// Buy command handler
+bot.onText(/\/buy/, async (msg) => {
+  const chatId = msg.chat.id;
+  
+  try {
+    const user = await initializeUser(msg.from);
+    await showPaymentPlans(chatId, user.id, msg.from.id);
+  } catch (error) {
+    console.error('Error in /buy command:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки тарифов.');
+  }
 });
 
 
@@ -581,6 +644,14 @@ bot.on('callback_query', async (callbackQuery) => {
       await handleCancelSetup(callbackQuery, user);
     } else if (data.startsWith('upload_')) {
       await handleImageUpload(callbackQuery, user);
+    } else if (data === 'buy_images') {
+      await showPaymentPlans(chatId, user.id, callbackQuery.from.id);
+    } else if (data === 'payment_history') {
+      await showPaymentHistory(callbackQuery, user);
+    } else if (data.startsWith('buy_plan_')) {
+      await handlePaymentPlan(callbackQuery, user);
+    } else if (data.startsWith('check_payment_')) {
+      await handlePaymentStatusCheck(callbackQuery, user);
     }
     
   } catch (error) {
@@ -1639,6 +1710,197 @@ async function handleCancelSetup(callbackQuery, user) {
   } catch (error) {
     console.error('Error in handleCancelSetup:', error.message);
     await bot.sendMessage(chatId, '❌ Настройка отменена.');
+  }
+}
+
+/**
+ * Show payment plans
+ */
+async function showPaymentPlans(chatId, userId, telegramId) {
+  try {
+    const plans = await backendApi.getPaymentPlans();
+    
+    let message = `💳 *Тарифы на изображения*\n\n`;
+    message += `Выберите подходящий тариф:\n\n`;
+    
+    const keyboard = {
+      inline_keyboard: []
+    };
+    
+    // Add plan buttons
+    Object.entries(plans).forEach(([planKey, plan]) => {
+      message += `📦 **${plan.name}** - ${plan.amount} руб.\n`;
+      keyboard.inline_keyboard.push([
+        { text: `💳 ${plan.name} - ${plan.amount} руб.`, callback_data: `buy_plan_${planKey}` }
+      ]);
+    });
+    
+    message += `\n💡 После оплаты изображения будут добавлены на ваш счет автоматически.`;
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+    
+  } catch (error) {
+    console.error('Error showing payment plans:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки тарифов.');
+  }
+}
+
+/**
+ * Handle payment plan selection
+ */
+async function handlePaymentPlan(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const data = callbackQuery.data;
+  const telegramId = callbackQuery.from.id;
+  
+  // Parse callback data: buy_plan_planType
+  const planType = data.split('_')[2];
+  
+  try {
+    const plans = await backendApi.getPaymentPlans();
+    const selectedPlan = plans[planType];
+    
+    if (!selectedPlan) {
+      return bot.sendMessage(chatId, '❌ Выбранный тариф не найден.');
+    }
+    
+    const processingMessage = await bot.sendMessage(chatId, 
+      `💳 Создаю платеж для тарифа "${selectedPlan.name}"...`
+    );
+    
+    // Create payment
+    const payment = await backendApi.createPayment({
+      userId: user.id,
+      planType: planType,
+      telegramId: telegramId.toString()
+    });
+    
+    await bot.deleteMessage(chatId, processingMessage.message_id);
+    
+    const message = `💳 *Оплата тарифа "${selectedPlan.name}"*\n\n`;
+    const paymentMessage = message + 
+      `💰 **Сумма:** ${payment.amount} руб.\n` +
+      `🖼️ **Изображений:** ${payment.imagesCount}\n` +
+      `⏰ **Действует:** 24 часа\n\n` +
+      `Нажмите кнопку ниже для перехода к оплате:`;
+    
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "💳 Перейти к оплате", url: payment.paymentUrl }],
+        [{ text: "📊 Проверить статус", callback_data: `check_payment_${payment.paymentId}` }]
+      ]
+    };
+    
+    await bot.sendMessage(chatId, paymentMessage, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+    
+  } catch (error) {
+    console.error('Error handling payment plan:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка создания платежа. Попробуйте позже.');
+  }
+}
+
+/**
+ * Handle payment status check
+ */
+async function handlePaymentStatusCheck(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const data = callbackQuery.data;
+  
+  // Parse callback data: check_payment_paymentId
+  const paymentId = data.split('_')[2];
+  
+  try {
+    const payment = await backendApi.getPaymentStatus(paymentId);
+    
+    let message = `📊 *Статус платежа*\n\n`;
+    message += `💰 **Сумма:** ${payment.amount} руб.\n`;
+    message += `🖼️ **Изображений:** ${payment.imagesCount}\n`;
+    
+    if (payment.status === 'completed') {
+      message += `✅ **Статус:** Оплачено\n\n`;
+      message += `🎉 Изображения добавлены на ваш счет!`;
+      
+      // Update user's subscription info
+      const subscription = await backendApi.getUserSubscription(user.id);
+      message += `\n\n💰 **Текущий баланс:** ${subscription.imagesRemaining} изображений`;
+      
+    } else if (payment.status === 'pending') {
+      message += `⏳ **Статус:** Ожидает оплаты\n\n`;
+      message += `💡 Платеж еще не завершен. Проверьте статус через несколько минут.`;
+      
+    } else if (payment.status === 'failed') {
+      message += `❌ **Статус:** Ошибка оплаты\n\n`;
+      message += `💡 Попробуйте создать новый платеж.`;
+      
+    } else {
+      message += `⏳ **Статус:** ${payment.status}\n\n`;
+      message += `💡 Платеж обрабатывается.`;
+    }
+    
+    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
+    
+  } catch (error) {
+    console.error('Error checking payment status:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка проверки статуса платежа.');
+  }
+}
+
+/**
+ * Show payment history
+ */
+async function showPaymentHistory(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  
+  try {
+    const history = await backendApi.getPaymentHistory(user.id, { limit: 10 });
+    
+    let message = `📊 *История платежей*\n\n`;
+    
+    if (history.payments && history.payments.length > 0) {
+      history.payments.forEach((payment, index) => {
+        const date = new Date(payment.createdAt).toLocaleDateString('ru-RU');
+        const statusEmoji = payment.status === 'completed' ? '✅' : 
+                           payment.status === 'pending' ? '⏳' : '❌';
+        
+        message += `${index + 1}. ${statusEmoji} ${payment.amount} руб. - ${payment.imagesCount} изображений\n`;
+        message += `   📅 ${date}\n\n`;
+      });
+      
+      if (history.transactions && history.transactions.length > 0) {
+        message += `📈 *Последние операции:*\n\n`;
+        history.transactions.slice(0, 5).forEach((transaction, index) => {
+          const date = new Date(transaction.createdAt).toLocaleDateString('ru-RU');
+          const typeEmoji = transaction.type === 'credit' ? '➕' : '➖';
+          
+          message += `${typeEmoji} ${transaction.amount} - ${transaction.description}\n`;
+          message += `   📅 ${date}\n\n`;
+        });
+      }
+    } else {
+      message += `📭 История платежей пуста.\n\n`;
+      message += `💡 Приобретите тариф для начала работы с ботом.`;
+    }
+    
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "💳 Купить изображения", callback_data: "buy_images" }]
+      ]
+    };
+    
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+    
+  } catch (error) {
+    console.error('Error showing payment history:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки истории платежей.');
   }
 }
 
