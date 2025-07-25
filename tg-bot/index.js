@@ -1857,10 +1857,18 @@ async function handlePaymentPlan(callbackQuery, user) {
       ]
     };
     
-    await bot.sendMessage(chatId, paymentMessage, {
+    const sentMessage = await bot.sendMessage(chatId, paymentMessage, {
       parse_mode: 'Markdown',
       reply_markup: keyboard
     });
+    
+    // Store payment message for later deletion when payment completes
+    paymentMessages.set(payment.paymentId, {
+      chatId: chatId,
+      messageId: sentMessage.message_id
+    });
+    
+    console.log(`[Payment Message] Stored message ${sentMessage.message_id} for payment ${payment.paymentId}`);
     
   } catch (error) {
     console.error('Error handling payment plan:', error.message);
@@ -1876,7 +1884,7 @@ async function handlePaymentStatusCheck(callbackQuery, user) {
   const data = callbackQuery.data;
   
   // Parse callback data: check_payment_paymentId
-  const paymentId = data.split('_')[2];
+  const paymentId = data.substring(14); // Remove "check_payment_" prefix
   
   try {
     const payment = await backendApi.getPaymentStatus(paymentId);
@@ -1967,6 +1975,97 @@ async function showPaymentHistory(callbackQuery, user) {
   }
 }
 
+
+// Storage for tracking notified payments to avoid duplicates
+const notifiedPayments = new Set();
+
+// Storage for payment messages that need to be deleted when payment completes
+const paymentMessages = new Map(); // paymentId -> { chatId, messageId }
+
+// Track last check time for completed payments
+let lastPaymentCheck = Date.now();
+
+/**
+ * Check for completed payments and notify users
+ */
+async function checkCompletedPayments() {
+  try {
+    console.log('[Payment Check] Checking for completed payments...');
+    
+    // Get recent completed payments since last check
+    const recentPayments = await backendApi.getRecentCompletedPayments(lastPaymentCheck);
+    
+    if (recentPayments.success && recentPayments.payments.length > 0) {
+      console.log(`[Payment Check] Found ${recentPayments.payments.length} completed payments`);
+      
+      for (const payment of recentPayments.payments) {
+        // Skip if already notified
+        if (notifiedPayments.has(payment.paymentId)) {
+          continue;
+        }
+        
+        try {
+          await notifyPaymentCompleted(payment.telegramId, payment);
+          notifiedPayments.add(payment.paymentId);
+          
+          // Clean up old notifications (keep only last 100)
+          if (notifiedPayments.size > 100) {
+            const oldestEntries = Array.from(notifiedPayments).slice(0, 20);
+            oldestEntries.forEach(id => notifiedPayments.delete(id));
+          }
+        } catch (error) {
+          console.error(`[Payment Check] Failed to notify user ${payment.telegramId}:`, error.message);
+        }
+      }
+    }
+    
+    // Update last check time
+    lastPaymentCheck = Date.now();
+    
+  } catch (error) {
+    console.error('[Payment Check] Error checking payments:', error.message);
+  }
+}
+
+/**
+ * Notify user about completed payment
+ */
+async function notifyPaymentCompleted(telegramId, paymentData) {
+  try {
+    // First, try to delete the payment message if we have it stored
+    const paymentMessage = paymentMessages.get(paymentData.paymentId);
+    if (paymentMessage) {
+      try {
+        await bot.deleteMessage(paymentMessage.chatId, paymentMessage.messageId);
+        console.log(`[Payment Message] Deleted payment message ${paymentMessage.messageId} for payment ${paymentData.paymentId}`);
+        
+        // Remove from storage
+        paymentMessages.delete(paymentData.paymentId);
+      } catch (deleteError) {
+        console.error(`[Payment Message] Failed to delete payment message:`, deleteError.message);
+        // Continue with notification even if deletion fails
+      }
+    }
+    
+    // Get plan name from payment data or use a default
+    const planName = paymentData.planName || `${paymentData.imagesCount} изображений`;
+    
+    const message = `🎉 *Оплата успешно получена!*\n\n` +
+      `💰 **Сумма:** ${paymentData.amount} руб.\n` +
+      `🖼️ **Добавлено изображений:** ${paymentData.imagesCount}\n` +
+      `📊 **Тариф:** ${planName}\n\n` +
+      `✅ Изображения добавлены на ваш счет. Выполните команду /start, чтобы начать генерировать!`;
+    
+    await bot.sendMessage(telegramId, message, { parse_mode: 'Markdown' });
+    console.log(`[Payment Notification] Sent to user ${telegramId}`);
+  } catch (error) {
+    console.error(`[Payment Notification] Failed to notify user ${telegramId}:`, error.message);
+  }
+}
+
+// Start periodic payment checking (every 10 seconds)
+const paymentCheckInterval = setInterval(checkCompletedPayments, 10000);
+console.log('🔄 Payment checking started (every 10 seconds)');
 
 // Log when bot is started
 console.log('🤖 Telegram Bot (Backend Integration) is running...');

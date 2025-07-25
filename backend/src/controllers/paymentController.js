@@ -5,6 +5,7 @@
 
 const paymentService = require('../services/paymentService');
 const User = require('../models/User');
+const Payment = require('../models/Payment');
 const logger = require('../utils/logger');
 
 /**
@@ -110,36 +111,16 @@ const handleWebhook = async (req, res) => {
 const getPaymentStatus = async (req, res) => {
   try {
     const { paymentId } = req.params;
-
-    if (!paymentId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Payment ID is required'
-      });
-    }
-
     const result = await paymentService.getPaymentStatus(paymentId);
-
+    
     if (!result.success) {
-      return res.status(404).json(result);
+      return res.status(404).json({ error: result.message });
     }
-
-    res.json({
-      success: true,
-      data: result.payment
-    });
-
+    
+    res.json(result.payment);
   } catch (error) {
-    logger.error('Error getting payment status', {
-      error: error.message,
-      paymentId: req.params.paymentId
-    });
-
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get payment status',
-      message: error.message
-    });
+    logger.error('Error getting payment status', { error: error.message, paymentId: req.params.paymentId });
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -288,62 +269,105 @@ const getPaymentPlans = async (req, res) => {
 };
 
 /**
- * Get user payment history
- * GET /api/payments/history/:userId
+ * Get payment history for user
  */
 const getPaymentHistory = async (req, res) => {
   try {
     const { userId } = req.params;
     const { page = 1, limit = 10 } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({
-        success: false,
-        error: 'User ID is required'
-      });
-    }
-
-    const user = await User.findById(userId)
-      .populate({
-        path: 'paymentHistory',
-        options: {
-          sort: { createdAt: -1 },
-          limit: parseInt(limit),
-          skip: (parseInt(page) - 1) * parseInt(limit)
-        }
-      });
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        error: 'User not found'
-      });
-    }
-
+    
+    logger.info('Get payment history request', { userId, page, limit });
+    
+    // Get user payments
+    const payments = await Payment.find({ userId })
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .skip((parseInt(page) - 1) * parseInt(limit))
+      .populate('userId', 'profile');
+    
+    // Get user transactions
+    const user = await User.findById(userId);
+    const transactions = user?.transactions || [];
+    
     res.json({
       success: true,
-      data: {
-        payments: user.paymentHistory,
-        transactions: user.transactions.slice(0, parseInt(limit)),
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total: user.paymentHistory.length
-        }
+      payments: payments.map(payment => ({
+        id: payment.paymentId,
+        amount: payment.amount,
+        currency: payment.currency,
+        status: payment.status,
+        planType: payment.planType,
+        imagesCount: payment.imagesCount,
+        createdAt: payment.createdAt,
+        completedAt: payment.completedAt
+      })),
+      transactions: transactions.slice(0, parseInt(limit)).map(transaction => ({
+        type: transaction.type,
+        amount: transaction.amount,
+        description: transaction.description,
+        createdAt: transaction.createdAt
+      })),
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: payments.length
       }
     });
-
+    
   } catch (error) {
-    logger.error('Error getting payment history', {
-      error: error.message,
-      userId: req.params.userId
+    logger.error('Error getting payment history', { 
+      error: error.message, 
+      userId: req.params.userId 
     });
+    res.status(500).json({ error: 'Internal server error' });
+  }
+};
 
-    res.status(500).json({
-      success: false,
-      error: 'Failed to get payment history',
-      message: error.message
+/**
+ * Get recently completed payments for bot notifications
+ */
+const getRecentCompletedPayments = async (req, res) => {
+  try {
+    const { since } = req.query;
+    const sinceDate = since ? new Date(parseInt(since)) : new Date(Date.now() - 60000); // Default: last minute
+    
+    logger.info('Get recent completed payments request', { since: sinceDate });
+    
+    // Find payments completed after the specified time
+    const recentPayments = await Payment.find({
+      status: 'completed',
+      completedAt: { $gte: sinceDate }
+    })
+    .sort({ completedAt: -1 })
+    .limit(50) // Limit to prevent too many results
+    .populate('userId', 'profile');
+    
+    const result = recentPayments.map(payment => ({
+      paymentId: payment.paymentId,
+      telegramId: payment.telegramId,
+      userId: payment.userId._id,
+      amount: payment.amount,
+      imagesCount: payment.imagesCount,
+      planType: payment.planType,
+      completedAt: payment.completedAt,
+      userProfile: payment.userId.profile
+    }));
+    
+    logger.info('Recent completed payments found', { count: result.length });
+    
+    res.json({
+      success: true,
+      payments: result,
+      count: result.length,
+      since: sinceDate
     });
+    
+  } catch (error) {
+    logger.error('Error getting recent completed payments', { 
+      error: error.message,
+      since: req.query.since
+    });
+    res.status(500).json({ error: 'Internal server error' });
   }
 };
 
@@ -354,5 +378,6 @@ module.exports = {
   getUserSubscription,
   paymentSuccess,
   getPaymentPlans,
-  getPaymentHistory
+  getPaymentHistory,
+  getRecentCompletedPayments
 };

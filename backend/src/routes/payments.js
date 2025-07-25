@@ -77,4 +77,12 @@ router.get('/plans', paymentController.getPaymentPlans);
  */
 router.get('/history/:userId', paymentController.getPaymentHistory);
 
+/**
+ * @route   GET /api/payments/recent-completed
+ * @desc    Get recently completed payments for bot notifications
+ * @access  Public (bot service)
+ * @query   since - Timestamp to get payments completed after this time
+ */
+router.get('/recent-completed', paymentController.getRecentCompletedPayments);
+
 module.exports = router;

@@ -70,17 +70,30 @@ class BackendApiService {
   }
 
   /**
-   * Get user by ID
-   * @param {string} userId User ID
-   * @returns {Promise<Object>} User object
+   * Get payment history for user
    */
-  async getUserById(userId) {
+  async getPaymentHistory(userId, options = {}) {
     try {
-      const response = await this.client.get(`/users/${userId}`);
-      return response.data.data;
+      const { page = 1, limit = 10 } = options;
+      const response = await this.makeRequest('GET', `/payments/history/${userId}?page=${page}&limit=${limit}`);
+      return response.data;
     } catch (error) {
-      console.error('Error getting user by ID:', error.message);
-      throw new Error(`Failed to get user: ${error.message}`);
+      console.error('Error getting payment history:', error.message);
+      throw error;
+    }
+  }
+
+  /**
+   * Get recently completed payments for bot notifications
+   */
+  async getRecentCompletedPayments(since = null) {
+    try {
+      const sinceParam = since ? `?since=${since}` : '';
+      const response = await this.client.get(`/payments/recent-completed${sinceParam}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error getting recent completed payments:', error.message);
+      throw error;
     }
   }
 
