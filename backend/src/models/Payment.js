@@ -21,6 +21,15 @@ const paymentSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  yoomoneyPaymentId: {
+    type: String,
+    default: null,
+    index: true
+  },
+  yoomoneyStatus: {
+    type: String,
+    default: null
+  },
   amount: {
     type: Number,
     required: true
