@@ -255,11 +255,9 @@ bot.onText(/\/start/, async (msg) => {
     // Check if user has active subscription FIRST
     const subscription = await backendApi.getUserSubscription(user.id);
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
-      await bot.sendMessage(chatId, 
-        '💳 *Необходимо оплатить тариф*\n\nДля генерации изображений нужно приобрести один из доступных тарифов.',
-        { parse_mode: 'Markdown' }
+      return showPaymentPlans(chatId, user.id, msg.from.id, 
+        '💳 *Необходимо оплатить тариф*\n\nДля генерации изображений нужно приобрести один из доступных тарифов:'
       );
-      return showPaymentPlans(chatId, user.id, msg.from.id);
     }
 
     // Only check stocks if subscription is active
@@ -294,11 +292,9 @@ bot.onText(/\/help/, async (msg) => {
     const subscription = await backendApi.getUserSubscription(user.id);
     
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
-      await bot.sendMessage(chatId, 
-        '💳 *Необходимо оплатить тариф*\n\nДля использования бота нужно приобрести один из доступных тарифов.',
-        { parse_mode: 'Markdown' }
+      return showPaymentPlans(chatId, user.id, msg.from.id,
+        '💳 *Необходимо оплатить тариф*\n\nДля использования бота нужно приобрести один из доступных тарифов:'
       );
-      return showPaymentPlans(chatId, user.id, msg.from.id);
     }
     
     const helpMessage = `📖 *Справка по использованию*
@@ -409,11 +405,9 @@ bot.onText(/\/mystocks/, async (msg) => {
     // Check subscription first
     const subscription = await backendApi.getUserSubscription(user.id);
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
-      await bot.sendMessage(chatId, 
-        '💳 *Необходимо оплатить тариф*\n\nДля управления стоковыми сервисами нужно приобрести один из доступных тарифов.',
-        { parse_mode: 'Markdown' }
+      return showPaymentPlans(chatId, user.id, msg.from.id,
+        '💳 *Необходимо оплатить тариф*\n\nДля управления стоковыми сервисами нужно приобрести один из доступных тарифов:'
       );
-      return showPaymentPlans(chatId, user.id, msg.from.id);
     }
     
     const stockServices = await backendApi.getStockServices(user.id);
@@ -511,11 +505,9 @@ bot.on('message', async (msg) => {
     // Check if user has active subscription FIRST
     const subscription = await backendApi.getUserSubscription(user.id);
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
-      await bot.sendMessage(chatId, 
-        '💳 *Необходимо оплатить тариф*\n\nДля генерации изображений нужно приобрести один из доступных тарифов.',
-        { parse_mode: 'Markdown' }
+      return showPaymentPlans(chatId, user.id, msg.from.id,
+        '💳 *Необходимо оплатить тариф*\n\nДля генерации изображений нужно приобрести один из доступных тарифов:'
       );
-      return showPaymentPlans(chatId, user.id, msg.from.id);
     }
 
     // Only check stocks if subscription is active
@@ -1782,12 +1774,17 @@ async function handleCancelSetup(callbackQuery, user) {
 /**
  * Show payment plans
  */
-async function showPaymentPlans(chatId, userId, telegramId) {
+async function showPaymentPlans(chatId, userId, telegramId, customMessage = null) {
   try {
     const plans = await backendApi.getPaymentPlans();
     
-    let message = `💳 *Тарифы на изображения*\n\n`;
-    message += `Выберите подходящий тариф:\n\n`;
+    let message;
+    if (customMessage) {
+      message = `${customMessage}\n\n`;
+    } else {
+      message = `💳 *Тарифы на изображения*\n\n`;
+      message += `Выберите подходящий тариф:\n\n`;
+    }
     
     const keyboard = {
       inline_keyboard: []
