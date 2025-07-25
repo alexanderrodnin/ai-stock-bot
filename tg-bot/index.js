@@ -1820,7 +1820,7 @@ async function handlePaymentPlan(callbackQuery, user) {
   const telegramId = callbackQuery.from.id;
   
   // Parse callback data: buy_plan_planType
-  const planType = data.split('_')[2];
+  const planType = data.substring(9); // Remove "buy_plan_" prefix
   
   try {
     const plans = await backendApi.getPaymentPlans();
