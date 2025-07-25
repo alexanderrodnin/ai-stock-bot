@@ -252,17 +252,7 @@ bot.onText(/\/start/, async (msg) => {
 
     await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
 
-    // Check if user has active stock services
-    const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
-    if (!hasActiveStocks) {
-      await bot.sendMessage(chatId, 
-        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
-        { parse_mode: 'Markdown' }
-      );
-      return showStockSetupMenu(chatId, user.id);
-    }
-
-    // Check if user has active subscription
+    // Check if user has active subscription FIRST
     const subscription = await backendApi.getUserSubscription(user.id);
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
       await bot.sendMessage(chatId, 
@@ -272,7 +262,17 @@ bot.onText(/\/start/, async (msg) => {
       return showPaymentPlans(chatId, user.id, msg.from.id);
     }
 
-    // Both stocks and subscription are ready
+    // Only check stocks if subscription is active
+    const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
+    if (!hasActiveStocks) {
+      await bot.sendMessage(chatId, 
+        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
+        { parse_mode: 'Markdown' }
+      );
+      return showStockSetupMenu(chatId, user.id);
+    }
+
+    // Both subscription and stocks are ready
     await bot.sendMessage(chatId, 
       `✅ Всё готово к работе!\n\n💰 **Баланс:** ${subscription.imagesRemaining} изображений\n\nОтправьте текстовое описание изображения для начала работы!`
     );
@@ -285,9 +285,23 @@ bot.onText(/\/start/, async (msg) => {
 });
 
 // Help command handler
-bot.onText(/\/help/, (msg) => {
+bot.onText(/\/help/, async (msg) => {
   const chatId = msg.chat.id;
-  const helpMessage = `📖 *Справка по использованию*
+  
+  try {
+    // Initialize user and check subscription first
+    const user = await initializeUser(msg.from);
+    const subscription = await backendApi.getUserSubscription(user.id);
+    
+    if (!subscription.isActive || subscription.imagesRemaining <= 0) {
+      await bot.sendMessage(chatId, 
+        '💳 *Необходимо оплатить тариф*\n\nДля использования бота нужно приобрести один из доступных тарифов.',
+        { parse_mode: 'Markdown' }
+      );
+      return showPaymentPlans(chatId, user.id, msg.from.id);
+    }
+    
+    const helpMessage = `📖 *Справка по использованию*
 
 *🤖 AI Модели:*
 • **Juggernaut Pro Flux** (по умолчанию) - профессиональные реалистичные изображения
@@ -321,7 +335,11 @@ bot.onText(/\/help/, (msg) => {
 /balance - проверить баланс изображений
 /buy - купить изображения`;
 
-  bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+    bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Error in /help command:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки справки.');
+  }
 });
 
 // Balance command handler
@@ -387,6 +405,17 @@ bot.onText(/\/mystocks/, async (msg) => {
   
   try {
     const user = await initializeUser(msg.from);
+    
+    // Check subscription first
+    const subscription = await backendApi.getUserSubscription(user.id);
+    if (!subscription.isActive || subscription.imagesRemaining <= 0) {
+      await bot.sendMessage(chatId, 
+        '💳 *Необходимо оплатить тариф*\n\nДля управления стоковыми сервисами нужно приобрести один из доступных тарифов.',
+        { parse_mode: 'Markdown' }
+      );
+      return showPaymentPlans(chatId, user.id, msg.from.id);
+    }
+    
     const stockServices = await backendApi.getStockServices(user.id);
     
     let message = `📊 *Управление стоковыми сервисами*\n\n`;
@@ -479,17 +508,7 @@ bot.on('message', async (msg) => {
     // Initialize user
     const user = await initializeUser(msg.from);
     
-    // Check if user has active stock services BEFORE starting generation
-    const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
-    if (!hasActiveStocks) {
-      await bot.sendMessage(chatId, 
-        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
-        { parse_mode: 'Markdown' }
-      );
-      return showStockSetupMenu(chatId, user.id);
-    }
-
-    // Check if user has active subscription BEFORE starting generation
+    // Check if user has active subscription FIRST
     const subscription = await backendApi.getUserSubscription(user.id);
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
       await bot.sendMessage(chatId, 
@@ -499,7 +518,17 @@ bot.on('message', async (msg) => {
       return showPaymentPlans(chatId, user.id, msg.from.id);
     }
 
-    // Only start processing if user has active stocks AND subscription
+    // Only check stocks if subscription is active
+    const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
+    if (!hasActiveStocks) {
+      await bot.sendMessage(chatId, 
+        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
+        { parse_mode: 'Markdown' }
+      );
+      return showStockSetupMenu(chatId, user.id);
+    }
+
+    // Only start processing if user has active subscription AND stocks
     const processingMessage = await bot.sendMessage(chatId, '🎨 Генерирую изображение, пожалуйста подождите...');
 
     try {
