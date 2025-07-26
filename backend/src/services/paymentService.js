@@ -5,13 +5,8 @@ const WebhookLog = require('../models/WebhookLog');
 const config = require('../config/config');
 const logger = require('../utils/logger');
 
-// Тарифные планы (из конфигурации)
-const PAYMENT_PLANS = {
-  plan_10: { amount: 2, images: 10, name: "10 изображений" },
-  plan_100: { amount: 3, images: 100, name: "100 изображений" },
-  plan_1000: { amount: 4, images: 1000, name: "1000 изображений" },
-  plan_10000: { amount: 5, images: 10000, name: "10000 изображений" }
-};
+// Тарифные планы (загружаются из конфигурации)
+const { paymentPlans: PAYMENT_PLANS } = config;
 
 /**
  * Генерация уникального ID платежа
@@ -65,6 +60,51 @@ function verifyWebhookSignature(data) {
 }
 
 /**
+ * Отмена активных платежей пользователя
+ */
+async function cancelActivePayments(telegramId, excludePaymentId = null) {
+  try {
+    const query = {
+      telegramId,
+      status: 'pending',
+      expiresAt: { $gt: new Date() }
+    };
+
+    // Исключить определенный платеж, если указан
+    if (excludePaymentId) {
+      query.paymentId = { $ne: excludePaymentId };
+    }
+
+    const activePayments = await Payment.find(query);
+    
+    if (activePayments.length > 0) {
+      // Обновить статус всех активных платежей на 'cancelled'
+      const result = await Payment.updateMany(query, {
+        status: 'cancelled',
+        cancelledAt: new Date()
+      });
+
+      logger.info('Active payments cancelled', {
+        telegramId,
+        cancelledCount: result.modifiedCount,
+        excludePaymentId
+      });
+
+      return result.modifiedCount;
+    }
+
+    return 0;
+  } catch (error) {
+    logger.error('Error cancelling active payments', {
+      error: error.message,
+      telegramId,
+      excludePaymentId
+    });
+    throw error;
+  }
+}
+
+/**
  * Создание нового платежа
  */
 async function createPayment(userId, planType, telegramId) {
@@ -81,15 +121,20 @@ async function createPayment(userId, planType, telegramId) {
       throw new Error('User not found');
     }
 
-    // Проверка активных платежей
+    // Проверка активных платежей для того же тарифа
     const activePay = await Payment.findOne({
       telegramId,
+      planType,
       status: 'pending',
       expiresAt: { $gt: new Date() }
     });
 
     if (activePay) {
-      logger.info('Active payment found', { paymentId: activePay.paymentId, telegramId });
+      logger.info('Active payment found for same plan', { 
+        paymentId: activePay.paymentId, 
+        telegramId, 
+        planType 
+      });
       return {
         success: true,
         payment: {
@@ -97,10 +142,21 @@ async function createPayment(userId, planType, telegramId) {
           paymentUrl: activePay.paymentUrl,
           amount: activePay.amount,
           imagesCount: activePay.imagesCount,
-          expiresAt: activePay.expiresAt
+          expiresAt: activePay.expiresAt,
+          planName: plan.name
         },
-        message: 'Активный платеж уже существует'
+        message: 'Активный платеж для этого тарифа уже существует'
       };
+    }
+
+    // Отменить все другие активные платежи пользователя
+    const cancelledCount = await cancelActivePayments(telegramId);
+    if (cancelledCount > 0) {
+      logger.info('Cancelled previous active payments', {
+        telegramId,
+        cancelledCount,
+        newPlanType: planType
+      });
     }
 
     // Генерация уникального ID платежа
@@ -131,7 +187,8 @@ async function createPayment(userId, planType, telegramId) {
       telegramId,
       userId: user._id,
       planType,
-      amount: plan.amount
+      amount: plan.amount,
+      cancelledPreviousPayments: cancelledCount
     });
 
     return {
@@ -141,7 +198,8 @@ async function createPayment(userId, planType, telegramId) {
         paymentUrl: payment.paymentUrl,
         amount: payment.amount,
         imagesCount: payment.imagesCount,
-        expiresAt: payment.expiresAt
+        expiresAt: payment.expiresAt,
+        planName: plan.name
       },
       message: 'Платеж создан успешно'
     };
@@ -430,6 +488,7 @@ module.exports = {
   generatePaymentId,
   generateYooMoneyPaymentUrl,
   verifyWebhookSignature,
+  cancelActivePayments,
   createPayment,
   processWebhook,
   getPaymentStatus,

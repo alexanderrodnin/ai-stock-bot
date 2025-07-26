@@ -33,7 +33,7 @@ const paymentSchema = new mongoose.Schema({
   status: {
     type: String,
     required: true,
-    enum: ['pending', 'completed', 'failed', 'expired'],
+    enum: ['pending', 'completed', 'failed', 'expired', 'cancelled'],
     default: 'pending',
     index: true
   },
@@ -60,6 +60,10 @@ const paymentSchema = new mongoose.Schema({
     index: true
   },
   completedAt: {
+    type: Date,
+    default: null
+  },
+  cancelledAt: {
     type: Date,
     default: null
   },

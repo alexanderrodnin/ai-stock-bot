@@ -121,13 +121,53 @@ const config = {
     baseUrl: process.env.BACKEND_URL || 'http://localhost:3000'
   },
 
-  // Payment plans configuration
-  paymentPlans: {
-    plan_10: { amount: 2, images: 10, name: "10 изображений" },
-    plan_100: { amount: 3, images: 100, name: "100 изображений" },
-    plan_1000: { amount: 4, images: 1000, name: "1000 изображений" },
-    plan_10000: { amount: 5, images: 10000, name: "10000 изображений" }
-  },
+  // Payment plans configuration (loaded from environment variables)
+  paymentPlans: (() => {
+    // Debug logging for payment plan environment variables
+    console.log('🔍 Payment Plans Environment Variables Debug:');
+    console.log('PAYMENT_PLAN_1_AMOUNT:', process.env.PAYMENT_PLAN_1_AMOUNT, 'parsed:', parseInt(process.env.PAYMENT_PLAN_1_AMOUNT));
+    console.log('PAYMENT_PLAN_2_AMOUNT:', process.env.PAYMENT_PLAN_2_AMOUNT, 'parsed:', parseInt(process.env.PAYMENT_PLAN_2_AMOUNT));
+    console.log('PAYMENT_PLAN_3_AMOUNT:', process.env.PAYMENT_PLAN_3_AMOUNT, 'parsed:', parseInt(process.env.PAYMENT_PLAN_3_AMOUNT));
+    console.log('PAYMENT_PLAN_4_AMOUNT:', process.env.PAYMENT_PLAN_4_AMOUNT, 'parsed:', parseInt(process.env.PAYMENT_PLAN_4_AMOUNT));
+    
+    console.log('PAYMENT_PLAN_1_IMAGES:', process.env.PAYMENT_PLAN_1_IMAGES, 'parsed:', parseInt(process.env.PAYMENT_PLAN_1_IMAGES));
+    console.log('PAYMENT_PLAN_2_IMAGES:', process.env.PAYMENT_PLAN_2_IMAGES, 'parsed:', parseInt(process.env.PAYMENT_PLAN_2_IMAGES));
+    console.log('PAYMENT_PLAN_3_IMAGES:', process.env.PAYMENT_PLAN_3_IMAGES, 'parsed:', parseInt(process.env.PAYMENT_PLAN_3_IMAGES));
+    console.log('PAYMENT_PLAN_4_IMAGES:', process.env.PAYMENT_PLAN_4_IMAGES, 'parsed:', parseInt(process.env.PAYMENT_PLAN_4_IMAGES));
+    
+    console.log('PAYMENT_PLAN_1_NAME:', process.env.PAYMENT_PLAN_1_NAME);
+    console.log('PAYMENT_PLAN_2_NAME:', process.env.PAYMENT_PLAN_2_NAME);
+    console.log('PAYMENT_PLAN_3_NAME:', process.env.PAYMENT_PLAN_3_NAME);
+    console.log('PAYMENT_PLAN_4_NAME:', process.env.PAYMENT_PLAN_4_NAME);
+
+    const plans = {
+      plan_10: { 
+        amount: parseInt(process.env.PAYMENT_PLAN_1_AMOUNT) || 2, 
+        images: parseInt(process.env.PAYMENT_PLAN_1_IMAGES) || 10, 
+        name: process.env.PAYMENT_PLAN_1_NAME || "10 изображений" 
+      },
+      plan_100: { 
+        amount: parseInt(process.env.PAYMENT_PLAN_2_AMOUNT) || 3, 
+        images: parseInt(process.env.PAYMENT_PLAN_2_IMAGES) || 100, 
+        name: process.env.PAYMENT_PLAN_2_NAME || "100 изображений" 
+      },
+      plan_1000: { 
+        amount: parseInt(process.env.PAYMENT_PLAN_3_AMOUNT) || 4, 
+        images: parseInt(process.env.PAYMENT_PLAN_3_IMAGES) || 1000, 
+        name: process.env.PAYMENT_PLAN_3_NAME || "1000 изображений" 
+      },
+      plan_10000: { 
+        amount: parseInt(process.env.PAYMENT_PLAN_4_AMOUNT) || 5, 
+        images: parseInt(process.env.PAYMENT_PLAN_4_IMAGES) || 10000, 
+        name: process.env.PAYMENT_PLAN_4_NAME || "10000 изображений" 
+      }
+    };
+
+    console.log('💰 Final Payment Plans Configuration:');
+    console.log(JSON.stringify(plans, null, 2));
+    
+    return plans;
+  })(),
 
   // AI Models configuration
   aiModels: {

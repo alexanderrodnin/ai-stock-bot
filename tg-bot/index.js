@@ -1843,10 +1843,9 @@ async function handlePaymentPlan(callbackQuery, user) {
     
     await bot.deleteMessage(chatId, processingMessage.message_id);
     
-    const message = `💳 *Оплата тарифа "${selectedPlan.name}"*\n\n`;
-    const paymentMessage = message + 
-      `💰 **Сумма:** ${payment.amount} руб.\n` +
-      `🖼️ **Изображений:** ${payment.imagesCount}\n` +
+    const paymentMessage = `💳 *Оплата тарифа "${selectedPlan.name}"*\n\n` +
+      `💰 **Сумма:** ${selectedPlan.amount} руб.\n` +
+      `🖼️ **Изображений:** ${selectedPlan.images}\n` +
       `⏰ **Действует:** 24 часа\n\n` +
       `Нажмите кнопку ниже для перехода к оплате:`;
     
