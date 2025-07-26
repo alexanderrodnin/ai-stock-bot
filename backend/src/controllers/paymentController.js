@@ -114,13 +114,22 @@ const getPaymentStatus = async (req, res) => {
     const result = await paymentService.getPaymentStatus(paymentId);
     
     if (!result.success) {
-      return res.status(404).json({ error: result.message });
+      return res.status(404).json({ 
+        success: false,
+        error: result.message 
+      });
     }
     
-    res.json(result.payment);
+    res.json({
+      success: true,
+      data: result.payment
+    });
   } catch (error) {
     logger.error('Error getting payment status', { error: error.message, paymentId: req.params.paymentId });
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({ 
+      success: false,
+      error: 'Internal server error' 
+    });
   }
 };
 
