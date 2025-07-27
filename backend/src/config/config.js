@@ -14,8 +14,7 @@ const config = {
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-stock-bot',
     options: {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      // Modern MongoDB driver doesn't need useNewUrlParser and useUnifiedTopology
     }
   },
 

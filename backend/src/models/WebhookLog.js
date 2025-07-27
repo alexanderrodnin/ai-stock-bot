@@ -3,8 +3,7 @@ const mongoose = require('mongoose');
 const webhookLogSchema = new mongoose.Schema({
   paymentId: {
     type: String,
-    required: true,
-    index: true
+    required: true
   },
   yoomoneyOperationId: {
     type: String,
@@ -26,8 +25,7 @@ const webhookLogSchema = new mongoose.Schema({
   },
   receivedAt: {
     type: Date,
-    default: Date.now,
-    index: true
+    default: Date.now
   },
   processedAt: {
     type: Date,
