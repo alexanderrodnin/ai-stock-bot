@@ -1884,25 +1884,26 @@ async function showPaymentHistory(callbackQuery, user) {
     
     // Check if history exists and has payments
     if (history && history.payments && Array.isArray(history.payments) && history.payments.length > 0) {
-      history.payments.forEach((payment, index) => {
-        const date = new Date(payment.createdAt).toLocaleDateString('ru-RU');
-        const statusEmoji = payment.status === 'completed' ? '✅' : 
-                           payment.status === 'pending' ? '⏳' : '❌';
-        
-        message += `${index + 1}. ${statusEmoji} ${payment.amount} руб. - ${payment.imagesCount} изображений\n`;
-        message += `   📅 ${date}\n\n`;
-      });
+      // Limit to maximum 10 payments and show only completed ones
+      const recentPayments = history.payments
+        .filter(payment => payment.status === 'completed')
+        .slice(0, 10);
       
-      // Check if transactions exist
-      if (history.transactions && Array.isArray(history.transactions) && history.transactions.length > 0) {
-        message += `📈 Последние операции:\n\n`;
-        history.transactions.slice(0, 5).forEach((transaction, index) => {
-          const date = new Date(transaction.createdAt).toLocaleDateString('ru-RU');
-          const typeEmoji = transaction.type === 'credit' ? '➕' : '➖';
+      if (recentPayments.length > 0) {
+        recentPayments.forEach((payment, index) => {
+          const date = new Date(payment.createdAt).toLocaleDateString('ru-RU');
+          const statusEmoji = '✅'; // Only completed payments are shown
           
-          message += `${typeEmoji} ${transaction.amount} - ${transaction.description}\n`;
+          message += `${index + 1}. ${statusEmoji} ${payment.amount} руб. - ${payment.imagesCount} изображений\n`;
           message += `   📅 ${date}\n\n`;
         });
+        
+        if (recentPayments.length === 10) {
+          message += `📝 Показаны последние 10 платежей\n\n`;
+        }
+      } else {
+        message += `📭 Нет завершенных платежей.\n\n`;
+        message += `💡 Приобретите тариф для начала работы с ботом.`;
       }
     } else {
       message += `📭 История платежей пуста.\n\n`;
