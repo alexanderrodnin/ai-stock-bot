@@ -272,7 +272,7 @@ bot.onText(/\/start/, async (msg) => {
 
     // Both subscription and stocks are ready
     await bot.sendMessage(chatId, 
-      `✅ Всё готово к работе!\n\n💰 **Баланс:** ${subscription.imagesRemaining} изображений\n\nОтправьте текстовое описание изображения для начала работы!`
+      `✅ Всё готово к работе!\n\n💰 Баланс: ${subscription.imagesRemaining} изображений\n\nОтправьте текстовое описание изображения для начала работы!`
     );
   } catch (error) {
     console.error('Error in /start command:', error.message);
@@ -708,8 +708,6 @@ bot.on('callback_query', async (callbackQuery) => {
       await showPaymentHistory(callbackQuery, user);
     } else if (data.startsWith('buy_plan_')) {
       await handlePaymentPlan(callbackQuery, user);
-    } else if (data.startsWith('check_payment_')) {
-      await handlePaymentStatusCheck(callbackQuery, user);
     }
     
   } catch (error) {
@@ -1851,8 +1849,7 @@ async function handlePaymentPlan(callbackQuery, user) {
     
     const keyboard = {
       inline_keyboard: [
-        [{ text: "💳 Перейти к оплате", url: payment.paymentUrl }],
-        [{ text: "📊 Проверить статус", callback_data: `check_payment_${payment.paymentId}` }]
+        [{ text: "💳 Перейти к оплате", url: payment.paymentUrl }]
       ]
     };
     
@@ -1875,51 +1872,6 @@ async function handlePaymentPlan(callbackQuery, user) {
   }
 }
 
-/**
- * Handle payment status check
- */
-async function handlePaymentStatusCheck(callbackQuery, user) {
-  const chatId = callbackQuery.message.chat.id;
-  const data = callbackQuery.data;
-  
-  // Parse callback data: check_payment_paymentId
-  const paymentId = data.substring(14); // Remove "check_payment_" prefix
-  
-  try {
-    const payment = await backendApi.getPaymentStatus(paymentId);
-    
-    let message = `📊 *Статус платежа*\n\n`;
-    message += `💰 **Сумма:** ${payment.amount} руб.\n`;
-    message += `🖼️ **Изображений:** ${payment.imagesCount}\n`;
-    
-    if (payment.status === 'completed') {
-      message += `✅ **Статус:** Оплачено\n\n`;
-      message += `🎉 Изображения добавлены на ваш счет!`;
-      
-      // Update user's subscription info
-      const subscription = await backendApi.getUserSubscription(user.id);
-      message += `\n\n💰 **Текущий баланс:** ${subscription.imagesRemaining} изображений`;
-      
-    } else if (payment.status === 'pending') {
-      message += `⏳ **Статус:** Ожидает оплаты\n\n`;
-      message += `💡 Платеж еще не завершен. Проверьте статус через несколько минут.`;
-      
-    } else if (payment.status === 'failed') {
-      message += `❌ **Статус:** Ошибка оплаты\n\n`;
-      message += `💡 Попробуйте создать новый платеж.`;
-      
-    } else {
-      message += `⏳ **Статус:** ${payment.status}\n\n`;
-      message += `💡 Платеж обрабатывается.`;
-    }
-    
-    await bot.sendMessage(chatId, message, { parse_mode: 'Markdown' });
-    
-  } catch (error) {
-    console.error('Error checking payment status:', error.message);
-    await bot.sendMessage(chatId, '❌ Ошибка проверки статуса платежа.');
-  }
-}
 
 /**
  * Show payment history
