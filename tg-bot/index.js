@@ -350,7 +350,6 @@ bot.onText(/\/balance/, async (msg) => {
     
     if (subscription.isActive) {
       message += `✅ Статус: Активная подписка\n`;
-      message += `📊 План: ${subscription.plan}\n`;
       message += `🖼️ Осталось изображений: ${subscription.imagesRemaining}\n`;
       
       if (subscription.expiresAt) {
@@ -1881,9 +1880,10 @@ async function showPaymentHistory(callbackQuery, user) {
   try {
     const history = await backendApi.getPaymentHistory(user.id, { limit: 10 });
     
-    let message = `📊 *История платежей*\n\n`;
+    let message = `📊 История платежей\n\n`;
     
-    if (history.payments && history.payments.length > 0) {
+    // Check if history exists and has payments
+    if (history && history.payments && Array.isArray(history.payments) && history.payments.length > 0) {
       history.payments.forEach((payment, index) => {
         const date = new Date(payment.createdAt).toLocaleDateString('ru-RU');
         const statusEmoji = payment.status === 'completed' ? '✅' : 
@@ -1893,8 +1893,9 @@ async function showPaymentHistory(callbackQuery, user) {
         message += `   📅 ${date}\n\n`;
       });
       
-      if (history.transactions && history.transactions.length > 0) {
-        message += `📈 *Последние операции:*\n\n`;
+      // Check if transactions exist
+      if (history.transactions && Array.isArray(history.transactions) && history.transactions.length > 0) {
+        message += `📈 Последние операции:\n\n`;
         history.transactions.slice(0, 5).forEach((transaction, index) => {
           const date = new Date(transaction.createdAt).toLocaleDateString('ru-RU');
           const typeEmoji = transaction.type === 'credit' ? '➕' : '➖';
@@ -1915,7 +1916,6 @@ async function showPaymentHistory(callbackQuery, user) {
     };
     
     await bot.sendMessage(chatId, message, {
-      parse_mode: 'Markdown',
       reply_markup: keyboard
     });
     

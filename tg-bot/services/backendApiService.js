@@ -69,19 +69,6 @@ class BackendApiService {
     }
   }
 
-  /**
-   * Get payment history for user
-   */
-  async getPaymentHistory(userId, options = {}) {
-    try {
-      const { page = 1, limit = 10 } = options;
-      const response = await this.makeRequest('GET', `/payments/history/${userId}?page=${page}&limit=${limit}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error getting payment history:', error.message);
-      throw error;
-    }
-  }
 
   /**
    * Get recently completed payments for bot notifications
@@ -452,7 +439,7 @@ class BackendApiService {
       if (options.limit) params.append('limit', options.limit);
       
       const response = await this.client.get(`/payments/history/${userId}?${params.toString()}`);
-      return response.data.data;
+      return response.data; // Backend returns data directly, not in data.data
     } catch (error) {
       console.error('Error getting payment history:', error.message);
       throw new Error(`Failed to get payment history: ${error.message}`);
