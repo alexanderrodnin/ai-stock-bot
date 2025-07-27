@@ -346,20 +346,20 @@ bot.onText(/\/balance/, async (msg) => {
     const user = await initializeUser(msg.from);
     const subscription = await backendApi.getUserSubscription(user.id);
     
-    let message = `💰 *Ваш баланс*\n\n`;
+    let message = `💰 Ваш баланс\n\n`;
     
     if (subscription.isActive) {
-      message += `✅ **Статус:** Активная подписка\n`;
-      message += `📊 **План:** ${subscription.plan}\n`;
-      message += `🖼️ **Осталось изображений:** ${subscription.imagesRemaining}\n`;
+      message += `✅ Статус: Активная подписка\n`;
+      message += `📊 План: ${subscription.plan}\n`;
+      message += `🖼️ Осталось изображений: ${subscription.imagesRemaining}\n`;
       
       if (subscription.expiresAt) {
         const expiryDate = new Date(subscription.expiresAt);
-        message += `⏰ **Действует до:** ${expiryDate.toLocaleDateString('ru-RU')}\n`;
+        message += `⏰ Действует до: ${expiryDate.toLocaleDateString('ru-RU')}\n`;
       }
     } else {
-      message += `❌ **Статус:** Подписка неактивна\n`;
-      message += `🖼️ **Изображений:** 0\n\n`;
+      message += `❌ Статус: Подписка неактивна\n`;
+      message += `🖼️ Изображений: 0\n\n`;
       message += `💡 Для генерации изображений необходимо приобрести тариф.`;
     }
     
@@ -371,7 +371,6 @@ bot.onText(/\/balance/, async (msg) => {
     };
     
     await bot.sendMessage(chatId, message, {
-      parse_mode: 'Markdown',
       reply_markup: keyboard
     });
     
