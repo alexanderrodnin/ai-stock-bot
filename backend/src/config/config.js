@@ -42,16 +42,6 @@ const config = {
     }
   },
 
-  // 123RF FTP configuration
-  ftp: {
-    host: process.env.FTP_HOST,
-    port: parseInt(process.env.FTP_PORT) || 21,
-    user: process.env.FTP_USER,
-    password: process.env.FTP_PASSWORD,
-    remotePath: process.env.FTP_REMOTE_PATH || '/ai_image',
-    secure: process.env.FTP_SECURE === 'true',
-    timeout: parseInt(process.env.FTP_TIMEOUT) || 30000
-  },
 
   // File storage configuration
   storage: {
@@ -122,52 +112,28 @@ const config = {
   },
 
   // Payment plans configuration (loaded from environment variables)
-  paymentPlans: (() => {
-    // Debug logging for payment plan environment variables
-    console.log('🔍 Payment Plans Environment Variables Debug:');
-    console.log('PAYMENT_PLAN_1_AMOUNT:', process.env.PAYMENT_PLAN_1_AMOUNT, 'parsed:', parseInt(process.env.PAYMENT_PLAN_1_AMOUNT));
-    console.log('PAYMENT_PLAN_2_AMOUNT:', process.env.PAYMENT_PLAN_2_AMOUNT, 'parsed:', parseInt(process.env.PAYMENT_PLAN_2_AMOUNT));
-    console.log('PAYMENT_PLAN_3_AMOUNT:', process.env.PAYMENT_PLAN_3_AMOUNT, 'parsed:', parseInt(process.env.PAYMENT_PLAN_3_AMOUNT));
-    console.log('PAYMENT_PLAN_4_AMOUNT:', process.env.PAYMENT_PLAN_4_AMOUNT, 'parsed:', parseInt(process.env.PAYMENT_PLAN_4_AMOUNT));
-    
-    console.log('PAYMENT_PLAN_1_IMAGES:', process.env.PAYMENT_PLAN_1_IMAGES, 'parsed:', parseInt(process.env.PAYMENT_PLAN_1_IMAGES));
-    console.log('PAYMENT_PLAN_2_IMAGES:', process.env.PAYMENT_PLAN_2_IMAGES, 'parsed:', parseInt(process.env.PAYMENT_PLAN_2_IMAGES));
-    console.log('PAYMENT_PLAN_3_IMAGES:', process.env.PAYMENT_PLAN_3_IMAGES, 'parsed:', parseInt(process.env.PAYMENT_PLAN_3_IMAGES));
-    console.log('PAYMENT_PLAN_4_IMAGES:', process.env.PAYMENT_PLAN_4_IMAGES, 'parsed:', parseInt(process.env.PAYMENT_PLAN_4_IMAGES));
-    
-    console.log('PAYMENT_PLAN_1_NAME:', process.env.PAYMENT_PLAN_1_NAME);
-    console.log('PAYMENT_PLAN_2_NAME:', process.env.PAYMENT_PLAN_2_NAME);
-    console.log('PAYMENT_PLAN_3_NAME:', process.env.PAYMENT_PLAN_3_NAME);
-    console.log('PAYMENT_PLAN_4_NAME:', process.env.PAYMENT_PLAN_4_NAME);
-
-    const plans = {
-      plan_10: { 
-        amount: parseInt(process.env.PAYMENT_PLAN_1_AMOUNT) || 2, 
-        images: parseInt(process.env.PAYMENT_PLAN_1_IMAGES) || 10, 
-        name: process.env.PAYMENT_PLAN_1_NAME || "10 изображений" 
-      },
-      plan_100: { 
-        amount: parseInt(process.env.PAYMENT_PLAN_2_AMOUNT) || 3, 
-        images: parseInt(process.env.PAYMENT_PLAN_2_IMAGES) || 100, 
-        name: process.env.PAYMENT_PLAN_2_NAME || "100 изображений" 
-      },
-      plan_1000: { 
-        amount: parseInt(process.env.PAYMENT_PLAN_3_AMOUNT) || 4, 
-        images: parseInt(process.env.PAYMENT_PLAN_3_IMAGES) || 1000, 
-        name: process.env.PAYMENT_PLAN_3_NAME || "1000 изображений" 
-      },
-      plan_10000: { 
-        amount: parseInt(process.env.PAYMENT_PLAN_4_AMOUNT) || 5, 
-        images: parseInt(process.env.PAYMENT_PLAN_4_IMAGES) || 10000, 
-        name: process.env.PAYMENT_PLAN_4_NAME || "10000 изображений" 
-      }
-    };
-
-    console.log('💰 Final Payment Plans Configuration:');
-    console.log(JSON.stringify(plans, null, 2));
-    
-    return plans;
-  })(),
+  paymentPlans: {
+    plan_10: { 
+      amount: parseInt(process.env.PAYMENT_PLAN_1_AMOUNT) || 2, 
+      images: parseInt(process.env.PAYMENT_PLAN_1_IMAGES) || 10, 
+      name: process.env.PAYMENT_PLAN_1_NAME || "10 изображений" 
+    },
+    plan_100: { 
+      amount: parseInt(process.env.PAYMENT_PLAN_2_AMOUNT) || 3, 
+      images: parseInt(process.env.PAYMENT_PLAN_2_IMAGES) || 100, 
+      name: process.env.PAYMENT_PLAN_2_NAME || "100 изображений" 
+    },
+    plan_1000: { 
+      amount: parseInt(process.env.PAYMENT_PLAN_3_AMOUNT) || 4, 
+      images: parseInt(process.env.PAYMENT_PLAN_3_IMAGES) || 1000, 
+      name: process.env.PAYMENT_PLAN_3_NAME || "1000 изображений" 
+    },
+    plan_10000: { 
+      amount: parseInt(process.env.PAYMENT_PLAN_4_AMOUNT) || 5, 
+      images: parseInt(process.env.PAYMENT_PLAN_4_IMAGES) || 10000, 
+      name: process.env.PAYMENT_PLAN_4_NAME || "10000 изображений" 
+    }
+  },
 
   // AI Models configuration
   aiModels: {
@@ -207,18 +173,6 @@ const validateConfig = () => {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
 
-  // Warn about optional but recommended variables
-  const recommended = [
-    'FTP_HOST',
-    'FTP_USER', 
-    'FTP_PASSWORD'
-  ];
-
-  const missingRecommended = recommended.filter(key => !process.env[key]);
-  
-  if (missingRecommended.length > 0) {
-    console.warn(`⚠️  Missing recommended environment variables: ${missingRecommended.join(', ')}`);
-  }
 };
 
 // Validate configuration on load
