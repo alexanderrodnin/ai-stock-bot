@@ -19,8 +19,7 @@ const config = {
       connectTimeoutMS: 60000, // 60 seconds (increased from default 10s)
       socketTimeoutMS: 60000, // 60 seconds (increased from default 0)
       
-      // Buffer settings
-      bufferMaxEntries: 0, // Disable mongoose buffering
+      // Buffer settings (updated for newer Mongoose versions)
       bufferCommands: false, // Disable mongoose buffering
       
       // Retry settings
