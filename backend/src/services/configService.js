@@ -23,25 +23,80 @@ class ConfigService {
    * Initialize the configuration service
    */
   async initialize() {
-    try {
-      logger.info('Initializing ConfigService...');
-      
-      // Load initial configurations
-      await this.loadAllConfigs();
-      
-      // Start polling for changes
-      this.startPolling();
-      
-      logger.info('ConfigService initialized successfully', {
-        cachedConfigs: this.cache.size,
-        pollingInterval: this.pollingInterval
-      });
-    } catch (error) {
-      logger.error('Failed to initialize ConfigService', {
-        error: error.message
-      });
-      throw error;
+    const maxRetries = 5;
+    const baseDelay = 2000; // 2 seconds
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        logger.info('Initializing ConfigService...', { attempt, maxRetries });
+        
+        // Load initial configurations with retry logic
+        await this.loadAllConfigsWithRetry();
+        
+        // Start polling for changes
+        this.startPolling();
+        
+        logger.info('ConfigService initialized successfully', {
+          cachedConfigs: this.cache.size,
+          pollingInterval: this.pollingInterval,
+          attempt
+        });
+        return; // Success, exit retry loop
+        
+      } catch (error) {
+        logger.error('Failed to initialize ConfigService', {
+          error: error.message,
+          attempt,
+          maxRetries
+        });
+        
+        if (attempt === maxRetries) {
+          // Last attempt failed, but don't crash the application
+          logger.warn('ConfigService initialization failed after all retries, starting with empty cache');
+          this.startPolling(); // Still start polling for future recovery
+          return;
+        }
+        
+        // Calculate delay with exponential backoff
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        logger.info(`Retrying ConfigService initialization in ${delay}ms...`);
+        await this.sleep(delay);
+      }
     }
+  }
+
+  /**
+   * Load all configurations with retry logic
+   */
+  async loadAllConfigsWithRetry() {
+    const maxRetries = 3;
+    const baseDelay = 1000; // 1 second
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        await this.loadAllConfigs();
+        return; // Success
+      } catch (error) {
+        if (attempt === maxRetries) {
+          throw error; // Last attempt, re-throw error
+        }
+        
+        const delay = baseDelay * Math.pow(2, attempt - 1);
+        logger.warn(`Failed to load configs, retrying in ${delay}ms...`, {
+          attempt,
+          maxRetries,
+          error: error.message
+        });
+        await this.sleep(delay);
+      }
+    }
+  }
+
+  /**
+   * Sleep utility function
+   */
+  async sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**

@@ -14,6 +14,27 @@ const config = {
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-stock-bot',
     options: {
+      // Connection timeout settings
+      serverSelectionTimeoutMS: 60000, // 60 seconds (increased from default 30s)
+      connectTimeoutMS: 60000, // 60 seconds (increased from default 10s)
+      socketTimeoutMS: 60000, // 60 seconds (increased from default 0)
+      
+      // Buffer settings
+      bufferMaxEntries: 0, // Disable mongoose buffering
+      bufferCommands: false, // Disable mongoose buffering
+      
+      // Retry settings
+      retryWrites: true,
+      retryReads: true,
+      
+      // Pool settings for better connection management
+      maxPoolSize: 10, // Maximum number of connections
+      minPoolSize: 1,  // Minimum number of connections
+      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+      
+      // Heartbeat settings
+      heartbeatFrequencyMS: 10000, // Check server every 10 seconds
+      
       // Modern MongoDB driver doesn't need useNewUrlParser and useUnifiedTopology
     }
   },
