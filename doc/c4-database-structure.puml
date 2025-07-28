@@ -1,0 +1,69 @@
+@startuml AI Stock Bot - Database Structure
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+title AI Stock Bot - Database Structure (MongoDB Collections)
+
+LAYOUT_WITH_LEGEND()
+
+' Main Database Container
+Container_Boundary(mongodb, "MongoDB Database") {
+    
+    ' Users Collection - Central entity
+    Container(users, "Users Collection", "MongoDB Collection", "Центральная коллекция пользователей с профилями, настройками стоковых сервисов, подписками и статистикой")
+    
+    ' Payments Collection
+    Container(payments, "Payments Collection", "MongoDB Collection", "Система платежей с интеграцией YooMoney, тарифными планами и историей транзакций")
+    
+    ' Images Collection
+    Container(images, "Images Collection", "MongoDB Collection", "Сгенерированные изображения с метаданными, настройками AI моделей и статусами загрузки")
+    
+    ' AppConfig Collection
+    Container(appconfig, "AppConfig Collection", "MongoDB Collection", "Динамическая конфигурация системы, настройки AI провайдеров и параметры приложения")
+    
+    ' ConfigAuditLog Collection
+    Container(auditlog, "ConfigAuditLog Collection", "MongoDB Collection", "Аудит всех изменений конфигураций с полной историей и метаданными")
+    
+    ' WebhookLog Collection
+    Container(webhooklog, "WebhookLog Collection", "MongoDB Collection", "Логи webhook уведомлений от YooMoney с валидацией подписей")
+}
+
+' External Systems
+System_Ext(telegram, "Telegram Bot", "Интерфейс пользователя")
+System_Ext(backend, "Backend API", "REST API сервер")
+System_Ext(yoomoney, "YooMoney", "Платежная система")
+System_Ext(ai_providers, "AI Providers", "OpenAI, Segmind")
+System_Ext(stock_services, "Stock Services", "123RF, Shutterstock, Adobe Stock")
+
+' Relationships between collections
+Rel_D(users, payments, "paymentHistory[]", "ObjectId references")
+Rel_D(users, images, "userId", "ObjectId reference")
+Rel_D(payments, users, "userId", "ObjectId reference")
+Rel_D(images, users, "userId", "ObjectId reference")
+Rel_D(auditlog, appconfig, "configKey", "Configuration changes tracking")
+
+' External system relationships
+Rel(telegram, users, "Creates/Updates", "externalId + externalSystem")
+Rel(backend, users, "CRUD operations", "User management")
+Rel(backend, payments, "Payment processing", "YooMoney integration")
+Rel(backend, images, "Image generation", "AI providers integration")
+Rel(yoomoney, webhooklog, "Webhook notifications", "Payment status updates")
+Rel(ai_providers, images, "Generated images", "AI model responses")
+Rel(stock_services, images, "Upload status", "Stock platform integration")
+
+' Collection Details
+note right of users : **Key Fields:**\n• externalId + externalSystem (unique)\n• profile (username, email, language)\n• stockServices (🔒 encrypted credentials)\n• subscription (plan, imagesRemaining)\n• stats (imagesGenerated, totalRequests)\n• paymentHistory[] (ObjectId refs)\n\n**Indexes:**\n• {externalId: 1, externalSystem: 1}\n• {'subscription.isActive': 1}\n• {'stats.lastActivity': -1}
+
+note right of payments : **Key Fields:**\n• userId (ObjectId ref to Users)\n• telegramId (number, indexed)\n• paymentId (string, unique)\n• yoomoneyOperationId\n• planType (plan_10|100|1000|10000)\n• status (pending|completed|failed)\n• amount, currency (RUB)\n\n**Indexes:**\n• {paymentId: 1} (unique)\n• {telegramId: 1, status: 1}\n• {status: 1, expiresAt: 1}
+
+note left of images : **Key Fields:**\n• userId (ObjectId ref to Users)\n• userExternalId + userExternalSystem\n• generation.model (dall-e-3|juggernaut-pro-flux|seedream-v3|hidream-i1-fast)\n• generation.provider (openai|segmind)\n• file (path, size, mimeType, dimensions)\n• uploads[] (service, status, settings)\n• metadata (title, keywords, category)\n\n**Indexes:**\n• {userId: 1, createdAt: -1}\n• {userExternalId: 1, userExternalSystem: 1}\n• {'uploads.service': 1, 'uploads.status': 1}
+
+note left of appconfig : **Key Fields:**\n• configKey (string, unique)\n• configType (system|user|feature|integration)\n• isActive (boolean, indexed)\n• value (Mixed - flexible schema)\n• metadata.version (auto-increment)\n\n**Indexes:**\n• {configKey: 1, isActive: 1}\n• {configType: 1, isActive: 1}\n• {updatedAt: -1}
+
+note right of auditlog : **Key Fields:**\n• configKey (tracked configuration)\n• action (CREATE|UPDATE|DELETE|ACTIVATE|DEACTIVATE)\n• oldValue, newValue (Mixed)\n• changedBy, changedAt\n• requestMetadata (IP, userAgent, endpoint)\n\n**Indexes:**\n• {configKey: 1, changedAt: -1}\n• {action: 1, changedAt: -1}\n• {changedBy: 1, changedAt: -1}
+
+note right of webhooklog : **Key Fields:**\n• paymentId (string)\n• yoomoneyOperationId\n• webhookData (Mixed - YooMoney payload)\n• signatureValid (boolean)\n• processed (boolean)\n• receivedAt, processedAt\n\n**Indexes:**\n• {paymentId: 1}\n• {processed: 1}\n• {receivedAt: 1}
+
+' Legend for special markings
+note bottom : **Legend:**\n🔒 = Encrypted fields (using AES-256)\n[] = Array fields\nObjectId = MongoDB ObjectId references\nMixed = Flexible schema (any JSON structure)
+
+@enduml
