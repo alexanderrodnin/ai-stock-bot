@@ -1,6 +1,9 @@
 # Multi-stage build for Backend API
 FROM node:18-alpine AS base
 
+# Install curl for healthcheck
+RUN apk add --no-cache curl
+
 # Set working directory
 WORKDIR /app
 
@@ -29,6 +32,10 @@ USER nodejs
 # Expose port
 EXPOSE 3000
 
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
+
 # Development command with hot reload
 CMD ["npm", "run", "dev"]
 
@@ -47,6 +54,10 @@ USER nodejs
 
 # Expose port
 EXPOSE 3000
+
+# Health check for production
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:3000/api/health || exit 1
 
 # Production command
 CMD ["npm", "start"]
