@@ -1,172 +1,34 @@
 # AI Stock Bot Backend API
 
-RESTful API backend для AI Stock Bot - системы генерации изображений с помощью множественных AI моделей (DALL-E 3, Juggernaut Pro Flux, Seedream V3, HiDream-I1 Fast) и автоматической загрузки на стоковую площадку 123RF.
+RESTful API backend для AI Stock Bot - системы генерации изображений с множественными AI моделями, интегрированной системой платежей YooMoney и автоматической загрузки на стоковые площадки.
 
 ## 🚀 Быстрый старт
 
 ### Предварительные требования
 - Node.js 18+
-- MongoDB
-- OpenAI API ключ
-- 123RF FTP учетные данные (опционально)
+- MongoDB 7.0+
+- API ключи (OpenAI, Segmind, YooMoney)
 
-### Установка
+### Установка и запуск
 
-1. Установите зависимости:
+#### Через Docker (рекомендуется)
 ```bash
+# Из корневой директории проекта
+docker-compose --profile backend up -d
+```
+
+#### Локальная разработка
+```bash
+cd backend
 npm install
-```
-
-2. Создайте файл окружения:
-```bash
 cp .env.example .env
-```
-
-3. Заполните переменные окружения в `.env`:
-```bash
-# Обязательные
-OPENAI_API_KEY=your_openai_api_key
-MONGODB_URI=mongodb://localhost:27017/ai-stock-bot
-
-# Опциональные AI провайдеры
-SEGMIND_API_KEY=your_segmind_api_key  # Для Segmind моделей (Juggernaut Pro Flux, Seedream V3, HiDream-I1 Fast)
-
-# 123RF FTP (опционально)
-FTP_HOST=ftp.123rf.com
-FTP_USER=your_ftp_username  
-FTP_PASSWORD=your_ftp_password
-FTP_REMOTE_PATH=/ai_image
-```
-
-4. Запустите сервер:
-```bash
-# Development mode
+# Настройте переменные окружения в .env
 npm run dev
-
-# Production mode
-npm start
 ```
 
 API будет доступен по адресу: `http://localhost:3000`
 
-### Запуск через Docker (рекомендуемый)
-
-1. Перейдите в корневую директорию проекта:
-```bash
-cd ..  # из папки backend в корень проекта
-```
-
-2. Скопируйте файл переменных окружения:
-```bash
-cp .env.example .env
-```
-
-3. Заполните обязательные переменные в `.env`:
-```bash
-OPENAI_API_KEY=your_openai_api_key_here
-TELEGRAM_TOKEN=your_telegram_bot_token
-JWT_SECRET=your_jwt_secret_key
-ENCRYPTION_KEY=your_32_character_encryption_key
-```
-
-4. Запустите сервисы:
-```bash
-# Запуск только backend и MongoDB
-docker-compose --profile backend up -d
-
-# Или полный стек с Telegram Bot
-docker-compose --profile backend --profile bot up -d
-```
-
-5. Проверьте статус сервисов:
-```bash
-docker-compose ps
-```
-
-6. Просмотр логов:
-```bash
-docker-compose logs -f backend
-```
-
-Сервисы будут доступны:
-- **Backend API**: http://localhost:3000
-- **MongoDB**: localhost:27017
-- **Mongo Express** (с --profile tools): http://localhost:8081
-
-## 📋 API Endpoints
-
-### Health Check
-- `GET /health` - Проверка статуса API
-- `GET /api/health` - Проверка статуса API (с rate limiting)
-
-### Images
-- `POST /api/images/generate` - Генерация изображения
-- `GET /api/images/:imageId/stream` - Потоковая передача изображения
-- `GET /api/users/:userId/images` - История изображений пользователя
-- `GET /api/images/:imageId` - Детали конкретного изображения
-- `DELETE /api/images/:imageId` - Удаление изображения
-
-### Upload (Stock Services)
-- `POST /api/upload/123rf` - Загрузка на 123RF
-- `GET /api/upload/status/:imageId` - Статус загрузки
-- `POST /api/upload/retry` - Повторная попытка загрузки
-
-### Users
-- `POST /api/users` - Создание/получение пользователя
-- `GET /api/users/:id` - Получение пользователя по ID
-- `PUT /api/users/:id` - Обновление пользователя
-- `DELETE /api/users/:id` - Удаление пользователя
-- `GET /api/users/:id/stats` - Статистика пользователя
-
-### Stock Services
-- `GET /api/users/:userId/stock-services` - Получение настроек стоковых сервисов
-- `PUT /api/users/:userId/stock-services/:service` - Обновление настроек сервиса
-- `DELETE /api/users/:userId/stock-services/:service` - Удаление настроек сервиса
-- `POST /api/users/:userId/stock-services/:service/test` - Тест соединения с сервисом
-
-### Admin API
-- `GET /api/admin/status` - Статус системы и AI моделей
-- `GET /api/admin/config` - Текущая конфигурация AI моделей
-- `PUT /api/admin/config/model/:modelName` - Переключение AI модели
-- `POST /api/admin/config/ai-model/switch` - Альтернативный способ переключения модели
-- `GET /api/admin/config/ai-models/available` - Список доступных моделей
-- `GET /api/admin/config/ai-models/history` - История переключений моделей
-
-Подробнее в [Admin API Guide](ADMIN_API_GUIDE.md).
-
-## 🔧 Конфигурация
-
-### Переменные окружения
-
-| Переменная | Обязательная | По умолчанию | Описание |
-|------------|--------------|--------------|----------|
-| `PORT` | Нет | 3000 | Порт сервера |
-| `NODE_ENV` | Нет | development | Окружение |
-| `MONGODB_URI` | Да | - | URI подключения к MongoDB |
-| `OPENAI_API_KEY` | Да | - | API ключ OpenAI |
-| `OPENAI_BASE_URL` | Нет | https://api.openai.com/v1 | Базовый URL OpenAI API |
-| `OPENAI_TIMEOUT` | Нет | 60000 | Таймаут OpenAI запросов (мс) |
-| `SEGMIND_API_KEY` | Нет | - | API ключ Segmind для Flux модели |
-| `SEGMIND_BASE_URL` | Нет | https://api.segmind.com/v1 | Базовый URL Segmind API |
-| `SEGMIND_TIMEOUT` | Нет | 120000 | Таймаут Segmind запросов (мс) |
-| `FTP_HOST` | Нет | ftp.123rf.com | Хост FTP сервера 123RF |
-| `FTP_PORT` | Нет | 21 | Порт FTP сервера |
-| `FTP_USER` | Нет | - | Пользователь FTP |
-| `FTP_PASSWORD` | Нет | - | Пароль FTP |
-| `FTP_REMOTE_PATH` | Нет | /ai_image | Путь на FTP сервере |
-| `FTP_SECURE` | Нет | false | Использовать FTPS |
-| `FTP_TIMEOUT` | Нет | 30000 | Таймаут FTP соединения (мс) |
-| `TEMP_DIR` | Нет | ./temp | Директория временных файлов |
-| `MAX_FILE_SIZE` | Нет | 10485760 | Максимальный размер файла (байт) |
-| `CLEANUP_INTERVAL` | Нет | 86400000 | Интервал очистки файлов (мс) |
-| `RATE_LIMIT_MAX` | Нет | 100 | Лимит запросов за окно |
-| `RATE_LIMIT_WINDOW` | Нет | 900000 | Окно rate limiting (мс) |
-| `ALLOWED_ORIGINS` | Нет | localhost:3000,localhost:3001 | Разрешенные CORS источники |
-| `ENCRYPTION_SECRET_KEY` | Да | - | Ключ шифрования (32 символа) |
-| `JWT_SECRET` | Нет | development-jwt-secret | JWT секрет |
-| `LOG_LEVEL` | Нет | info | Уровень логирования |
-
-## 🏗️ Архитектура
+## 🏗️ Архитектура Backend
 
 ### Структура проекта
 ```
@@ -175,160 +37,314 @@ backend/
 │   ├── app.js              # Express приложение
 │   ├── server.js           # HTTP сервер
 │   ├── config/
-│   │   ├── config.js       # Конфигурация
+│   │   ├── config.js       # Конфигурация приложения
 │   │   └── database.js     # MongoDB подключение
-│   ├── controllers/        # Контроллеры
-│   │   ├── imageController.js
-│   │   ├── uploadController.js
-│   │   └── userController.js
+│   ├── controllers/        # Контроллеры API
+│   │   ├── adminController.js      # Административные функции
+│   │   ├── imageController.js      # Генерация изображений
+│   │   ├── paymentController.js    # Платежная система
+│   │   ├── uploadController.js     # Загрузка на стоки
+│   │   └── userController.js       # Управление пользователями
 │   ├── middleware/         # Middleware
-│   │   ├── errorHandler.js
-│   │   └── rateLimiter.js
-│   ├── routes/            # Маршруты
-│   │   ├── index.js
-│   │   ├── images.js
-│   │   ├── upload.js
-│   │   └── users.js
-│   ├── services/          # Бизнес-логика
-│   │   ├── imageService.js
-│   │   ├── stockUploadService.js
-│   │   └── ftpService.js
+│   │   ├── errorHandler.js         # Обработка ошибок
+│   │   ├── rateLimiter.js          # Rate limiting
+│   │   └── subscriptionCheck.js    # Проверка подписки
 │   ├── models/            # MongoDB модели
-│   │   ├── User.js
-│   │   └── Image.js
+│   │   ├── User.js                 # Пользователи
+│   │   ├── Image.js                # Изображения
+│   │   ├── Payment.js              # Платежи
+│   │   ├── WebhookLog.js           # Webhook логи
+│   │   ├── AppConfig.js            # Конфигурация
+│   │   └── ConfigAuditLog.js       # Аудит конфигурации
+│   ├── routes/            # API маршруты
+│   │   ├── admin.js               # /api/admin/*
+│   │   ├── images.js              # /api/images/*
+│   │   ├── payments.js            # /api/payments/*
+│   │   ├── upload.js              # /api/upload/*
+│   │   └── users.js               # /api/users/*
+│   ├── services/          # Бизнес-логика
+│   │   ├── configService.js       # Динамическая конфигурация
+│   │   ├── imageService.js        # Генерация изображений
+│   │   ├── paymentService.js      # Платежная система
+│   │   ├── ftpService.js          # FTP загрузка
+│   │   ├── stockUploadService.js  # Стоковые сервисы
+│   │   └── aiProviders/           # AI провайдеры
+│   │       ├── juggernautProFluxService.js
+│   │       ├── hiDreamI1Service.js
+│   │       └── seedreamV3Service.js
 │   └── utils/             # Утилиты
-│       ├── logger.js
-│       ├── encryption.js
-│       └── mock-image-urls.js
+│       ├── encryption.js          # Шифрование данных
+│       ├── logger.js              # Логирование
+│       └── mock-image-urls.js     # Fallback изображения
 ├── temp/                  # Временные файлы
 ├── package.json
-├── .env.example
-└── README.md
+└── .env.example
+```
+
+### Express.js Pipeline
+```
+Request → API Routes → Middleware Stack → Controllers → Services → Database/External APIs
 ```
 
 ### Middleware Stack
-1. **Security** - Helmet для безопасности
-2. **CORS** - Настройка cross-origin запросов
-3. **Compression** - Сжатие ответов
-4. **Body Parsing** - Парсинг JSON/URL-encoded
-5. **Logging** - Morgan для HTTP логов
-6. **Rate Limiting** - Защита от злоупотреблений
-7. **Validation** - express-validator
-8. **Error Handling** - Централизованная обработка ошибок
+1. **Security Headers** (Helmet)
+2. **CORS** - Cross-origin requests
+3. **Compression** - Response compression
+4. **Body Parsing** - JSON/URL-encoded
+5. **HTTP Logging** (Morgan)
+6. **Rate Limiting** - Anti-abuse protection
+7. **Subscription Check** - Balance validation
+8. **Validation** (express-validator)
+9. **Error Handling** - Centralized error processing
 
-### Основные сервисы
+## 📋 API Reference
 
-#### ImageService
-- Генерация изображений через множественные AI модели:
-  - OpenAI DALL-E 3 (по умолчанию)
-  - Juggernaut Pro Flux (Segmind)
-  - Seedream V3 (Segmind)
-  - HiDream-I1 Fast (Segmind)
-- Динамическое переключение между AI провайдерами через Admin API
-- Автоматический fallback при сбоях моделей
-- Обработка изображений с помощью Sharp (изменение размера до 4000x4000)
-- Fallback на mock изображения при недоступности AI провайдеров
-- Потоковая передача изображений
+### Health & Status
+```
+GET    /health                     - Basic health check
+GET    /api/health                 - API health check with rate limiting
+GET    /api/admin/health           - Admin health check
+GET    /api/admin/status           - System status with AI providers
+```
 
-#### StockUploadService
-- Загрузка изображений на стоковые площадки
-- Поддержка 123RF через FTP
-- Управление настройками стоковых сервисов
-- Отслеживание статуса загрузок
+### Images API (`/api/images/*`)
+```
+POST   /api/images/generate                    - Generate image
+GET    /api/images/user/:userId               - User's images
+GET    /api/images/external/:externalId/:externalSystem - By external ID
+GET    /api/images/:imageId                   - Get image details
+GET    /api/images/:imageId/file              - Download image file
+GET    /api/images/:imageId/thumbnail         - Get thumbnail
+PUT    /api/images/:imageId/metadata          - Update metadata
+DELETE /api/images/:imageId                   - Delete image
+POST   /api/images/:imageId/upload/:service   - Upload to stock service
+GET    /api/images/:imageId/uploads           - Upload status
+POST   /api/images/:imageId/retry/:service    - Retry upload
+```
 
-#### FtpService
-- Подключение к FTP серверам
-- Загрузка файлов с метаданными
-- Тестирование соединений
-- Обработка ошибок и повторные попытки
+### Upload API (`/api/upload/*`)
+```
+POST   /api/upload/123rf                      - Upload to 123RF
+POST   /api/upload/:service                   - Universal upload
+POST   /api/upload/batch/:service             - Batch upload
+GET    /api/upload/status/:imageId            - Upload status
+POST   /api/upload/retry/:imageId/:service    - Retry upload
+POST   /api/upload/test/:service              - Test connection
+GET    /api/upload/stats/:userId              - Upload statistics
+DELETE /api/upload/:imageId/:service          - Cancel upload
+```
 
-## 📊 Мониторинг и логирование
+### Users API (`/api/users/*`)
+```
+POST   /api/users                             - Create/get user
+GET    /api/users/:userId                     - Get user
+GET    /api/users/external/:externalId/:externalSystem - By external ID
+PUT    /api/users/:userId/profile             - Update profile
+PUT    /api/users/:userId/preferences         - Update preferences
+GET    /api/users/:userId/stock-services      - Stock services
+PUT    /api/users/:userId/stock-services/:service - Update service
+DELETE /api/users/:userId/stock-services/:service - Delete service
+POST   /api/users/:userId/stock-services/:service/test - Test service
+GET    /api/users/:userId/stats               - User statistics
+PUT    /api/users/:userId/subscription        - Update subscription
+DELETE /api/users/:userId                     - Delete user
+GET    /api/users/stats/system                - System statistics
+```
 
-### Логи
-- **Development**: Человекочитаемый формат
-- **Production**: JSON формат для структурированного логирования
-- **Уровни**: error, warn, info, debug
+### Payments API (`/api/payments/*`)
+```
+POST   /api/payments/create                   - Create payment
+POST   /api/payments/webhook                  - YooMoney webhook
+GET    /api/payments/status/:paymentId        - Payment status
+GET    /api/payments/subscription/:userId     - Subscription info
+GET    /api/payments/success                  - Success page
+GET    /api/payments/plans                    - Available plans
+GET    /api/payments/history/:userId          - Payment history
+GET    /api/payments/recent-completed         - Recent payments (for bot)
+```
 
-### Health Check
+### Admin API (`/api/admin/*`)
+```
+GET    /api/admin/health                      - Health check
+GET    /api/admin/status                      - System status
+GET    /api/admin/config                      - Get configuration
+PUT    /api/admin/config                      - Update configuration
+POST   /api/admin/config/reload               - Reload configuration
+PUT    /api/admin/config/model/:modelName     - Switch model
+POST   /api/admin/config/ai-model/switch      - Switch AI model
+GET    /api/admin/config/ai-models            - List AI models
+GET    /api/admin/config/ai-models/available  - Available models
+GET    /api/admin/config/ai-models/history    - Switch history
+GET    /api/admin/config/logs                 - Configuration logs
+GET    /api/admin/configs                     - All configurations
+```
+
+Подробная документация Admin API: [../doc/ADMIN_API_GUIDE.md](../doc/ADMIN_API_GUIDE.md)
+
+## 🔧 Конфигурация
+
+### Переменные окружения
+
+#### Обязательные
 ```bash
-curl http://localhost:3000/health
+# Database
+MONGODB_URI=mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin
+
+# AI Providers
+OPENAI_API_KEY=your_openai_api_key
+SEGMIND_API_KEY=your_segmind_api_key
+
+# Payment System
+YOOMONEY_CLIENT_ID=your_yoomoney_client_id
+YOOMONEY_WALLET=your_yoomoney_wallet
+YOOMONEY_WEBHOOK_SECRET=your_webhook_secret
+
+# Security
+JWT_SECRET=your_jwt_secret_key_minimum_32_characters
+ENCRYPTION_KEY=your_encryption_key_exactly_32_characters
 ```
 
-Ответ:
-```json
-{
-  "status": "OK",
-  "timestamp": "2025-01-07T12:00:00.000Z",
-  "uptime": 3600,
-  "environment": "development",
-  "version": "1.0.0",
-  "database": "connected",
-  "services": {
-    "openai": "available",
-    "ftp": "configured"
-  }
-}
+#### Опциональные
+```bash
+# Server
+PORT=3000
+NODE_ENV=development
+
+# AI Provider URLs
+OPENAI_BASE_URL=https://api.openai.com/v1
+SEGMIND_BASE_URL=https://api.segmind.com/v1
+
+# Timeouts (milliseconds)
+OPENAI_TIMEOUT=60000
+SEGMIND_TIMEOUT=120000
+
+# FTP (123RF)
+FTP_HOST=ftp.123rf.com
+FTP_PORT=21
+FTP_USER=your_ftp_username
+FTP_PASSWORD=your_ftp_password
+FTP_REMOTE_PATH=/ai_image
+FTP_SECURE=false
+FTP_TIMEOUT=30000
+
+# File handling
+TEMP_DIR=./temp
+MAX_FILE_SIZE=10485760
+CLEANUP_INTERVAL=86400000
+
+# Rate limiting
+RATE_LIMIT_MAX=100
+RATE_LIMIT_WINDOW=900000
+
+# CORS
+ALLOWED_ORIGINS=localhost:3000,localhost:3001
+
+# Logging
+LOG_LEVEL=info
 ```
+
+### Полный список переменных в `.env.example`
+
+## 🤖 AI Models Integration
+
+### Поддерживаемые модели
+1. **Juggernaut Pro Flux** (по умолчанию) - Segmind API
+2. **DALL-E 3** - OpenAI API
+3. **Seedream V3** - Segmind API
+4. **HiDream-I1 Fast** - Segmind API
+
+### Система фоллбеков
+- Автоматическое переключение при сбоях
+- Настраиваемый порядок приоритета
+- Fallback на mock изображения
+
+Подробнее: [../doc/AI_MODELS_GUIDE.md](../doc/AI_MODELS_GUIDE.md)
+
+## 💳 Payment System
+
+### YooMoney Integration
+- Создание платежей через API
+- Webhook обработка для автоматического подтверждения
+- Управление подписками и балансом изображений
+- Уведомления в Telegram
+
+### Subscription Management
+- Автоматическое списание изображений
+- Проверка баланса через middleware
+- Блокировка генерации при нулевом балансе
+- История платежей и аудит
 
 ## 🔒 Безопасность
 
-### Rate Limiting
-- **API общий**: 100 запросов / 15 минут
-- **Генерация изображений**: 10 запросов / 5 минут  
-- **Загрузки**: 20 запросов / 10 минут
-- **Создание аккаунтов**: 5 запросов / час
-
 ### Шифрование данных
-- Чувствительные данные (FTP пароли) шифруются в MongoDB
-- Использование AES-256-GCM для шифрования
-- Безопасное хранение ключей шифрования
+- AES-256-GCM для чувствительных данных
+- Шифрование FTP паролей в MongoDB
+- Безопасное хранение API ключей
+
+### Rate Limiting
+```javascript
+// Общий API
+100 requests / 15 minutes
+
+// Генерация изображений
+10 requests / 5 minutes
+
+// Загрузки
+20 requests / 10 minutes
+
+// Создание аккаунтов
+5 requests / hour
+
+// Платежи
+30 requests / 15 minutes
+```
 
 ### Валидация
-- Все входные данные валидируются
-- Поддержка sanitization
-- Автоматическая генерация ошибок валидации
+- express-validator для всех входных данных
+- Sanitization пользовательского ввода
+- Проверка типов и форматов
 
-### Заголовки безопасности
+### Security Headers
 - Content Security Policy
 - X-Frame-Options
 - X-Content-Type-Options
-- И другие через Helmet
+- HSTS (в продакшене)
 
-## 🐳 Docker
+## 📊 Мониторинг и логирование
 
-### Docker команды
+### Логирование
+```javascript
+// Development: человекочитаемый формат
+// Production: JSON формат для структурированного анализа
 
+// Уровни: error, warn, info, debug
+LOG_LEVEL=info
+```
+
+### Health Checks
 ```bash
-# Основные команды
-npm run docker:up:build    # Запуск с пересборкой
-npm run docker:up          # Запуск без пересборки  
-npm run docker:down        # Остановка сервисов
-npm run docker:down:volumes # Остановка с удалением volumes
-npm run docker:logs        # Просмотр логов backend
+# Basic health
+curl http://localhost:3000/health
 
-# Дополнительные команды
-npm run docker:mongo       # Запуск только MongoDB
-npm run docker:tools       # Запуск с Mongo Express
+# API health with details
+curl http://localhost:3000/api/health
+
+# Admin status with AI providers
+curl http://localhost:3000/api/admin/status
 ```
 
-### Docker Compose структура
+### Метрики
+- Время ответа API
+- Статус AI провайдеров
+- Успешность генерации изображений
+- Статистика платежей
+- Использование ресурсов
 
-```yaml
-# docker-compose.yml включает:
-- backend:     Node.js API (build из Dockerfile)
-- mongodb:     MongoDB 7.0.5 с персистентным storage
-- mongo-express: Web UI для MongoDB (опционально)
-```
+## 🧪 Тестирование
 
-### Volumes и Networks
+### Примеры API запросов
 
-- **mongodb_data**: Персистентное хранение данных MongoDB
-- **ai-stock-bot-network**: Изолированная сеть для сервисов
-- **Hot reload**: Код монтируется для live обновлений
-
-## 📚 Примеры использования
-
-### Генерация изображения
+#### Генерация изображения
 ```bash
 curl -X POST http://localhost:3000/api/images/generate \
   -H "Content-Type: application/json" \
@@ -337,20 +353,35 @@ curl -X POST http://localhost:3000/api/images/generate \
     "userId": "user123",
     "userExternalId": "telegram_user_456",
     "options": {
-      "model": "dall-e-3",
-      "size": "1024x1024",
-      "quality": "standard"
+      "model": "juggernaut-pro-flux",
+      "size": "1024x1024"
     }
   }'
 ```
 
-### Потоковая передача изображения
+#### Создание платежа
 ```bash
-curl -X GET "http://localhost:3000/api/images/img_123/stream?userId=user123" \
-  --output image.jpg
+curl -X POST http://localhost:3000/api/payments/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "userId": "user123",
+    "telegramId": "telegram_user_456",
+    "planId": "plan_100_images",
+    "returnUrl": "https://t.me/your_bot"
+  }'
 ```
 
-### Загрузка на 123RF
+#### Переключение AI модели
+```bash
+curl -X POST http://localhost:3000/api/admin/config/ai-model/switch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "dall-e-3",
+    "reason": "Testing OpenAI model"
+  }'
+```
+
+#### Загрузка на 123RF
 ```bash
 curl -X POST http://localhost:3000/api/upload/123rf \
   -H "Content-Type: application/json" \
@@ -360,63 +391,148 @@ curl -X POST http://localhost:3000/api/upload/123rf \
     "title": "Beautiful Mountain Landscape",
     "description": "AI-generated landscape with mountains",
     "keywords": ["landscape", "mountains", "nature", "ai"],
-    "category": "Digital Art",
-    "pricing": "standard"
+    "category": "Digital Art"
   }'
 ```
 
-### Создание пользователя
+## 🐳 Docker Development
+
+### Docker команды
 ```bash
-curl -X POST http://localhost:3000/api/users \
-  -H "Content-Type: application/json" \
-  -d '{
-    "externalId": "telegram_123",
-    "externalSystem": "telegram",
-    "profile": {
-      "username": "john_doe",
-      "firstName": "John",
-      "lastName": "Doe",
-      "language": "en"
-    }
-  }'
+# Запуск backend + MongoDB
+npm run docker:up
+
+# Запуск с пересборкой
+npm run docker:up:build
+
+# Остановка
+npm run docker:down
+
+# Просмотр логов
+npm run docker:logs
+
+# Только MongoDB
+npm run docker:mongo
+
+# С инструментами (Mongo Express)
+npm run docker:tools
 ```
 
-## 🤝 Интеграция с клиентами
+### Docker Compose структура
+- **backend**: Node.js API (build из Dockerfile)
+- **mongodb**: MongoDB 7.0.5 с персистентным storage
+- **mongo-express**: Web UI для MongoDB (опционально)
 
-API предназначен для интеграции с:
-- **Telegram Bot** (текущий основной клиент)
-- **Web Interface** (планируемый)
-- **Mobile Apps** (будущие интеграции)
-- **Другие клиентские приложения**
+### Volumes и Networks
+- **mongodb_data**: Персистентное хранение данных
+- **ai-stock-bot-network**: Изолированная сеть
+- **Hot reload**: Код монтируется для live обновлений
 
-### Потоковая передача изображений
-- Изображения передаются через потоки без сохранения на клиенте
-- Поддержка больших файлов (до 10MB)
-- Эффективное использование памяти
+## 🔧 Разработка
 
-## 📈 Масштабирование
+### Локальная разработка
+```bash
+# Установка зависимостей
+npm install
 
-- Горизонтальное масштабирование через load balancer
-- Stateless архитектура
+# Запуск в режиме разработки (с hot reload)
+npm run dev
+
+# Запуск в продакшене
+npm start
+
+# Линтинг
+npm run lint
+
+# Форматирование кода
+npm run format
+```
+
+### Структура сервисов
+
+#### ImageService
+- Оркестрация генерации изображений
+- Управление AI провайдерами
+- Система фоллбеков
+- Обработка изображений (Sharp)
+- Потоковая передача
+
+#### PaymentService
+- Интеграция с YooMoney API
+- Создание и обработка платежей
+- Webhook processing
+- Управление подписками
+- Уведомления в Telegram
+
+#### ConfigService
+- Динамическое управление конфигурацией
+- Polling механизм (30 секунд)
+- Кэширование конфигурации
+- Аудит изменений
+- Переключение AI моделей
+
+#### FtpService
+- Подключение к FTP серверам
+- Загрузка файлов с метаданными
+- Тестирование соединений
+- Retry механизмы
+
+## 📈 Производительность
+
+### Оптимизации
+- Кэширование конфигурации в памяти
+- Потоковая передача изображений
+- Сжатие HTTP ответов
+- Индексы MongoDB для быстрых запросов
+- Connection pooling для MongoDB
+
+### Масштабирование
+- Stateless архитектура для горизонтального масштабирования
+- Load balancer ready
 - Поддержка кластеризации
-- MongoDB для персистентности данных
 - Файловое хранилище может быть заменено на S3/MinIO
 
 ## 🚧 Roadmap
 
-- [x] Реализация OpenAI DALL-E 3 интеграции
-- [x] MongoDB модели и схемы
-- [x] 123RF FTP загрузка
-- [x] Система пользователей
-- [x] Потоковая передача изображений
-- [x] Шифрование чувствительных данных
-- [ ] Кэширование (Redis)
-- [ ] Метрики и мониторинг (Prometheus)
-- [ ] Swagger документация
-- [ ] Unit и интеграционные тесты
-- [ ] S3/MinIO для файлового хранилища
-- [ ] Дополнительные стоковые сервисы (по запросу)
+### Реализовано ✅
+- Множественные AI провайдеры
+- Система платежей YooMoney
+- Динамическая конфигурация
+- Административная панель
+- Шифрование данных
+- Rate limiting
+- Потоковая передача изображений
+
+### В разработке 🔄
+- Unit и интеграционные тесты
+- Swagger/OpenAPI документация
+- Метрики и мониторинг (Prometheus)
+- Кэширование (Redis)
+
+### Планируется 📋
+- S3/MinIO для файлового хранилища
+- Дополнительные стоковые сервисы
+- GraphQL API
+- WebSocket для real-time обновлений
+- Batch processing API
 
 ## 📝 Лицензия
 
 MIT License
+
+## 🤝 Contributing
+
+1. Fork репозитория
+2. Создайте feature branch
+3. Следуйте code style (ESLint + Prettier)
+4. Добавьте тесты для новой функциональности
+5. Убедитесь, что все тесты проходят
+6. Создайте Pull Request
+
+## 📞 Поддержка
+
+Для технических вопросов по backend:
+1. Проверьте логи: `docker-compose logs backend`
+2. Проверьте health check: `curl http://localhost:3000/api/health`
+3. Изучите [документацию](../doc/README.md)
+4. Создайте Issue в GitHub

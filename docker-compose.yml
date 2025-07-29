@@ -19,11 +19,11 @@ services:
     restart: unless-stopped
     command: mongod --bind_ip_all
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--authenticationDatabase", "admin", "-u", "${MONGO_INITDB_ROOT_USERNAME}", "-p", "${MONGO_INITDB_ROOT_PASSWORD}", "--eval", "db.getSiblingDB('ai-stock-bot').runCommand('ping').ok"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      timeout: 15s
+      retries: 5
+      start_period: 60s
     profiles: ["backend", "full"]
 
   # Backend API Service
@@ -43,6 +43,27 @@ services:
       - JWT_SECRET=${JWT_SECRET}
       - ENCRYPTION_KEY=${ENCRYPTION_KEY}
       - PORT=${PORT}
+      # YooMoney Payment System
+      - YOOMONEY_CLIENT_ID=${YOOMONEY_CLIENT_ID}
+      - YOOMONEY_WALLET=${YOOMONEY_WALLET}
+      - YOOMONEY_API_URL=${YOOMONEY_API_URL}
+      - YOOMONEY_QUICKPAY_URL=${YOOMONEY_QUICKPAY_URL}
+      - YOOMONEY_WEBHOOK_SECRET=${YOOMONEY_WEBHOOK_SECRET}
+      - YOOMONEY_NOTIFICATION_URI=${YOOMONEY_NOTIFICATION_URI}
+      - BACKEND_URL=${BACKEND_URL}
+      # Payment Plans Configuration
+      - PAYMENT_PLAN_1_NAME=${PAYMENT_PLAN_1_NAME}
+      - PAYMENT_PLAN_1_AMOUNT=${PAYMENT_PLAN_1_AMOUNT}
+      - PAYMENT_PLAN_1_IMAGES=${PAYMENT_PLAN_1_IMAGES}
+      - PAYMENT_PLAN_2_NAME=${PAYMENT_PLAN_2_NAME}
+      - PAYMENT_PLAN_2_AMOUNT=${PAYMENT_PLAN_2_AMOUNT}
+      - PAYMENT_PLAN_2_IMAGES=${PAYMENT_PLAN_2_IMAGES}
+      - PAYMENT_PLAN_3_NAME=${PAYMENT_PLAN_3_NAME}
+      - PAYMENT_PLAN_3_AMOUNT=${PAYMENT_PLAN_3_AMOUNT}
+      - PAYMENT_PLAN_3_IMAGES=${PAYMENT_PLAN_3_IMAGES}
+      - PAYMENT_PLAN_4_NAME=${PAYMENT_PLAN_4_NAME}
+      - PAYMENT_PLAN_4_AMOUNT=${PAYMENT_PLAN_4_AMOUNT}
+      - PAYMENT_PLAN_4_IMAGES=${PAYMENT_PLAN_4_IMAGES}
     volumes:
       # Mount source code for development hot reload
       - ./backend/src:/app/src
@@ -55,11 +76,11 @@ services:
       - ai-stock-bot-network
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:${PORT}/api/health"]
+      test: ["CMD", "curl", "-f", "http://localhost:${PORT}/api/health"]
       interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
+      timeout: 15s
+      retries: 5
+      start_period: 90s
     profiles: ["backend", "full"]
 
   # Telegram Bot Service

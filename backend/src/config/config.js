@@ -14,8 +14,27 @@ const config = {
   mongodb: {
     uri: process.env.MONGODB_URI || 'mongodb://localhost:27017/ai-stock-bot',
     options: {
-      useNewUrlParser: true,
-      useUnifiedTopology: true,
+      // Connection timeout settings
+      serverSelectionTimeoutMS: 60000, // 60 seconds (increased from default 30s)
+      connectTimeoutMS: 60000, // 60 seconds (increased from default 10s)
+      socketTimeoutMS: 60000, // 60 seconds (increased from default 0)
+      
+      // Buffer settings (updated for newer Mongoose versions)
+      bufferCommands: false, // Disable mongoose buffering
+      
+      // Retry settings
+      retryWrites: true,
+      retryReads: true,
+      
+      // Pool settings for better connection management
+      maxPoolSize: 10, // Maximum number of connections
+      minPoolSize: 1,  // Minimum number of connections
+      maxIdleTimeMS: 30000, // Close connections after 30 seconds of inactivity
+      
+      // Heartbeat settings
+      heartbeatFrequencyMS: 10000, // Check server every 10 seconds
+      
+      // Modern MongoDB driver doesn't need useNewUrlParser and useUnifiedTopology
     }
   },
 
@@ -42,16 +61,6 @@ const config = {
     }
   },
 
-  // 123RF FTP configuration
-  ftp: {
-    host: process.env.FTP_HOST,
-    port: parseInt(process.env.FTP_PORT) || 21,
-    user: process.env.FTP_USER,
-    password: process.env.FTP_PASSWORD,
-    remotePath: process.env.FTP_REMOTE_PATH || '/ai_image',
-    secure: process.env.FTP_SECURE === 'true',
-    timeout: parseInt(process.env.FTP_TIMEOUT) || 30000
-  },
 
   // File storage configuration
   storage: {
@@ -106,6 +115,45 @@ const config = {
     secretKey: process.env.ENCRYPTION_SECRET_KEY || process.env.JWT_SECRET || 'your-encryption-secret-key'
   },
 
+  // YooMoney payment configuration
+  yoomoney: {
+    clientId: process.env.YOOMONEY_CLIENT_ID,
+    wallet: process.env.YOOMONEY_WALLET,
+    apiUrl: process.env.YOOMONEY_API_URL || 'https://yoomoney.ru/api',
+    quickpayUrl: process.env.YOOMONEY_QUICKPAY_URL || 'https://yoomoney.ru/quickpay/confirm.xml',
+    webhookSecret: process.env.YOOMONEY_WEBHOOK_SECRET,
+    notificationUri: process.env.YOOMONEY_NOTIFICATION_URI
+  },
+
+  // Application base URL
+  app: {
+    baseUrl: process.env.BACKEND_URL || 'http://localhost:3000'
+  },
+
+  // Payment plans configuration (loaded from environment variables)
+  paymentPlans: {
+    plan_10: { 
+      amount: parseInt(process.env.PAYMENT_PLAN_1_AMOUNT) || 2, 
+      images: parseInt(process.env.PAYMENT_PLAN_1_IMAGES) || 10, 
+      name: process.env.PAYMENT_PLAN_1_NAME || "10 изображений" 
+    },
+    plan_100: { 
+      amount: parseInt(process.env.PAYMENT_PLAN_2_AMOUNT) || 3, 
+      images: parseInt(process.env.PAYMENT_PLAN_2_IMAGES) || 100, 
+      name: process.env.PAYMENT_PLAN_2_NAME || "100 изображений" 
+    },
+    plan_1000: { 
+      amount: parseInt(process.env.PAYMENT_PLAN_3_AMOUNT) || 4, 
+      images: parseInt(process.env.PAYMENT_PLAN_3_IMAGES) || 1000, 
+      name: process.env.PAYMENT_PLAN_3_NAME || "1000 изображений" 
+    },
+    plan_10000: { 
+      amount: parseInt(process.env.PAYMENT_PLAN_4_AMOUNT) || 5, 
+      images: parseInt(process.env.PAYMENT_PLAN_4_IMAGES) || 10000, 
+      name: process.env.PAYMENT_PLAN_4_NAME || "10000 изображений" 
+    }
+  },
+
   // AI Models configuration
   aiModels: {
     // Default AI model (changed from dall-e-3 to juggernaut-pro-flux)
@@ -144,18 +192,6 @@ const validateConfig = () => {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
 
-  // Warn about optional but recommended variables
-  const recommended = [
-    'FTP_HOST',
-    'FTP_USER', 
-    'FTP_PASSWORD'
-  ];
-
-  const missingRecommended = recommended.filter(key => !process.env[key]);
-  
-  if (missingRecommended.length > 0) {
-    console.warn(`⚠️  Missing recommended environment variables: ${missingRecommended.join(', ')}`);
-  }
 };
 
 // Validate configuration on load

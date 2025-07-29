@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-Руководство по развертыванию AI Stock Bot в продакшене с использованием Docker образов и автоматическими обновлениями.
+Руководство по развертыванию AI Stock Bot в продакшене с использованием Docker образов, автоматическими обновлениями и интегрированной платежной системой YooMoney.
 
 ## 🚀 Быстрый старт
 
@@ -33,6 +33,7 @@ docker-compose -f docker-compose-prod.yml logs -f
 - **Telegram Bot**: `alexanderrodnin/ai-stock-bot-tg-bot:latest`
 - **MongoDB**: `mongo:7.0.5`
 - **Watchtower**: `containrrr/watchtower:latest`
+- **MongoDB Express**: `mongo-express:latest` (опционально для разработки)
 
 ## 🔄 Автоматические обновления (Watchtower)
 
@@ -64,11 +65,45 @@ ENCRYPTION_KEY=your_encryption_key_here_exactly_32_characters
 MONGO_INITDB_ROOT_USERNAME=admin
 MONGO_INITDB_ROOT_PASSWORD=your_secure_mongodb_password_here
 
-# OpenAI
+# AI Providers
 OPENAI_API_KEY=your_openai_api_key_here
+SEGMIND_API_KEY=your_segmind_api_key_here
 
-# Telegram
+# Telegram Bot
 TELEGRAM_TOKEN=your_telegram_bot_token_here
+
+# YooMoney Payment System
+YOOMONEY_SHOP_ID=your_yoomoney_shop_id_here
+YOOMONEY_SECRET_KEY=your_yoomoney_secret_key_here
+YOOMONEY_RETURN_URL=https://yourdomain.com/api/payments/success
+
+# 123RF Stock Service (опционально)
+RF123_USERNAME=your_123rf_username_here
+RF123_PASSWORD=your_123rf_password_here
+RF123_FTP_HOST=ftp.123rf.com
+RF123_FTP_PORT=21
+```
+
+### Дополнительные переменные окружения:
+
+```env
+# API Configuration
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_TIMEOUT=60000
+SEGMIND_BASE_URL=https://api.segmind.com/v1
+SEGMIND_TIMEOUT=120000
+
+# Server Configuration
+PORT=3000
+NODE_ENV=production
+LOG_LEVEL=info
+
+# Database Configuration
+MONGODB_URI=mongodb://admin:password@mongodb:27017/ai-stock-bot?authSource=admin
+
+# File Storage
+TEMP_DIR=/app/temp
+MAX_FILE_SIZE=50MB
 ```
 
 ### Опциональные уведомления Watchtower:
@@ -88,8 +123,29 @@ WATCHTOWER_NOTIFICATION_URL=telegram://token@chatid
 
 ### Доступные интерфейсы:
 - **Backend API**: http://localhost:3000
-- **MongoDB Express**: http://localhost:8081
+- **Admin API**: http://localhost:3000/api/admin
+- **Payment API**: http://localhost:3000/api/payments
+- **MongoDB Express**: http://localhost:8081 (только для разработки)
 - **Telegram Bot**: Работает в фоне
+
+### Health Checks:
+
+```bash
+# Общий health check
+curl http://localhost:3000/api/health
+
+# Admin health check
+curl http://localhost:3000/api/admin/health
+
+# Статус системы
+curl http://localhost:3000/api/admin/status
+
+# Проверка конфигурации AI моделей
+curl http://localhost:3000/api/admin/config
+
+# Проверка тарифных планов
+curl http://localhost:3000/api/payments/plans
+```
 
 ### Проверка логов:
 
@@ -101,6 +157,23 @@ docker-compose -f docker-compose-prod.yml logs -f
 docker-compose -f docker-compose-prod.yml logs -f backend
 docker-compose -f docker-compose-prod.yml logs -f tg-bot
 docker-compose -f docker-compose-prod.yml logs -f watchtower
+
+# Фильтрация логов по уровню
+docker-compose -f docker-compose-prod.yml logs -f backend | grep ERROR
+docker-compose -f docker-compose-prod.yml logs -f backend | grep WARN
+```
+
+### Мониторинг платежной системы:
+
+```bash
+# Проверка недавних платежей
+curl "http://localhost:3000/api/payments/recent?since=$(date -d '1 hour ago' +%s)000"
+
+# Статистика платежей
+curl http://localhost:3000/api/admin/payments/stats
+
+# Проверка webhook логов
+curl "http://localhost:3000/api/admin/webhooks/logs?limit=10"
 ```
 
 ### Проверка обновлений:
@@ -111,6 +184,19 @@ docker logs ai-stock-bot-watchtower
 
 # Принудительная проверка обновлений
 docker exec ai-stock-bot-watchtower watchtower --run-once
+```
+
+### Мониторинг AI моделей:
+
+```bash
+# Текущая активная модель
+curl http://localhost:3000/api/admin/config | jq '.data.config.activeModel'
+
+# История переключений моделей
+curl "http://localhost:3000/api/admin/config/ai-models/history?limit=5"
+
+# Статистика генерации по моделям
+curl http://localhost:3000/api/admin/images/stats
 ```
 
 ## 🔄 Управление

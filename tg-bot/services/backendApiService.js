@@ -69,18 +69,18 @@ class BackendApiService {
     }
   }
 
+
   /**
-   * Get user by ID
-   * @param {string} userId User ID
-   * @returns {Promise<Object>} User object
+   * Get recently completed payments for bot notifications
    */
-  async getUserById(userId) {
+  async getRecentCompletedPayments(since = null) {
     try {
-      const response = await this.client.get(`/users/${userId}`);
-      return response.data.data;
+      const sinceParam = since ? `?since=${since}` : '';
+      const response = await this.client.get(`/payments/recent-completed${sinceParam}`);
+      return response.data;
     } catch (error) {
-      console.error('Error getting user by ID:', error.message);
-      throw new Error(`Failed to get user: ${error.message}`);
+      console.error('Error getting recent completed payments:', error.message);
+      throw error;
     }
   }
 
@@ -200,8 +200,16 @@ class BackendApiService {
       console.error('Error generating image:', error.message);
       
       // Check for specific error codes
-      if (error.response?.data?.error?.code === 'NO_ACTIVE_STOCK_SERVICES') {
+      if (error.response?.data?.error === 'NO_ACTIVE_STOCK_SERVICES') {
         throw new Error('NO_ACTIVE_STOCK_SERVICES');
+      }
+      
+      if (error.response?.data?.error === 'SUBSCRIPTION_REQUIRED') {
+        throw new Error('SUBSCRIPTION_REQUIRED');
+      }
+      
+      if (error.response?.data?.error === 'NO_IMAGES_REMAINING') {
+        throw new Error('NO_IMAGES_REMAINING');
       }
       
       throw new Error(`Failed to generate image: ${error.message}`);
@@ -353,6 +361,88 @@ class BackendApiService {
       return true;
     } catch (error) {
       return false;
+    }
+  }
+
+  /**
+   * Get payment plans
+   * @returns {Promise<Object>} Available payment plans
+   */
+  async getPaymentPlans() {
+    try {
+      const response = await this.client.get('/payments/plans');
+      return response.data.data;
+    } catch (error) {
+      console.error('Error getting payment plans:', error.message);
+      throw new Error(`Failed to get payment plans: ${error.message}`);
+    }
+  }
+
+  /**
+   * Create payment
+   * @param {Object} paymentData Payment data
+   * @param {string} paymentData.userId User ID
+   * @param {string} paymentData.planType Plan type
+   * @param {string} paymentData.telegramId Telegram user ID
+   * @returns {Promise<Object>} Payment data with URL
+   */
+  async createPayment(paymentData) {
+    try {
+      const response = await this.client.post('/payments/create', paymentData);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error creating payment:', error.message);
+      throw new Error(`Failed to create payment: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get payment status
+   * @param {string} paymentId Payment ID
+   * @returns {Promise<Object>} Payment status
+   */
+  async getPaymentStatus(paymentId) {
+    try {
+      const response = await this.client.get(`/payments/status/${paymentId}`);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error getting payment status:', error.message);
+      throw new Error(`Failed to get payment status: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get user subscription
+   * @param {string} userId User ID
+   * @returns {Promise<Object>} User subscription info
+   */
+  async getUserSubscription(userId) {
+    try {
+      const response = await this.client.get(`/payments/subscription/${userId}`);
+      return response.data.data;
+    } catch (error) {
+      console.error('Error getting user subscription:', error.message);
+      throw new Error(`Failed to get user subscription: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get payment history
+   * @param {string} userId User ID
+   * @param {Object} options Query options
+   * @returns {Promise<Object>} Payment history
+   */
+  async getPaymentHistory(userId, options = {}) {
+    try {
+      const params = new URLSearchParams();
+      if (options.page) params.append('page', options.page);
+      if (options.limit) params.append('limit', options.limit);
+      
+      const response = await this.client.get(`/payments/history/${userId}?${params.toString()}`);
+      return response.data; // Backend returns data directly, not in data.data
+    } catch (error) {
+      console.error('Error getting payment history:', error.message);
+      throw new Error(`Failed to get payment history: ${error.message}`);
     }
   }
 }

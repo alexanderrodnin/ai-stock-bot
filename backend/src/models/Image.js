@@ -190,8 +190,7 @@ const imageSchema = new mongoose.Schema({
 
     // File hash for deduplication
     hash: {
-      type: String,
-      index: true
+      type: String
     },
 
     // Original URL from OpenAI (temporary)

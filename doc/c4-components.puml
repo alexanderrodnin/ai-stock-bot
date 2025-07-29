@@ -3,44 +3,71 @@
 
 LAYOUT_WITH_LEGEND()
 
-title Component Diagram for AI Stock Bot - Multi-Interface Image Generation System
+title Component Diagram for AI Stock Bot - Multi-Interface Image Generation System with Payment & Admin
 
-Person(user, "User", "End user requesting image generation")
+Person(user, "User", "End user requesting image generation and managing subscriptions")
+Person(admin, "Admin", "System administrator managing configuration and monitoring")
 
 System_Boundary(frontend_interfaces, "Frontend Interfaces") {
-    Container(telegram_bot, "Telegram Bot", "Node.js, node-telegram-bot-api", "Telegram interface for image generation and 123RF upload")
+    Container(telegram_bot, "Telegram Bot", "Node.js, node-telegram-bot-api", "Telegram interface for image generation, payment, and 123RF management")
     Container(web_interface, "Web Interface", "Future", "Web-based interface for image generation")
 }
 
 System_Boundary(telegram_system, "Telegram Platform") {
-    Container(telegram_api, "Telegram Bot API", "REST API", "Handles bot communication, message delivery")
+    Container(telegram_api, "Telegram Bot API", "REST API", "Handles bot communication, message delivery, payment notifications")
+}
+
+System_Boundary(payment_system, "Payment System") {
+    Container(yoomoney_api, "YooMoney API", "Payment Gateway", "Processes payments and sends webhooks")
 }
 
 System_Boundary(backend_system, "AI Stock Bot Backend") {
     Container_Boundary(api_gateway, "API Gateway - Express.js Application") {
-        Component(api_routes, "API Routes", "Express Router", "Route definitions: /api/images, /api/upload, /api/users")
-        Component(controllers, "Controllers", "Node.js Classes", "Business logic: ImageController, UploadController, UserController")
-        Component(middleware, "Middleware", "Express Middleware", "Auth, validation, error handling, logging")
-        Component(api_config, "API Configuration", "Express Config", "CORS, body parser, rate limiting")
+        Component(api_routes, "API Routes", "Express Router", "Route definitions: /api/images, /api/upload, /api/users, /api/payments, /api/admin")
+        Component(controllers, "Controllers", "Node.js Classes", "Business logic: ImageController, UploadController, UserController, PaymentController, AdminController")
+        Component(middleware, "Middleware", "Express Middleware", "Auth, validation, error handling, logging, subscription check, rate limiting")
+        Component(api_config, "API Configuration", "Express Config", "CORS, body parser, rate limiting, health checks")
     }
     
     Container_Boundary(core_services, "Core Services") {
-        Component(image_service, "Image Service", "Node.js Class", "Orchestrates image generation with fallback strategies")
+        Component(image_service, "Image Service", "Node.js Class", "Orchestrates image generation with AI provider fallback strategies")
+        Component(payment_service, "Payment Service", "Node.js Class", "Handles YooMoney integration, subscription management, webhook processing")
+        Component(config_service, "Configuration Service", "Node.js Class", "Dynamic configuration management, AI model switching")
         Component(ftp_service, "FTP Service", "Node.js Class, basic-ftp", "Uploads images to 123RF via FTP")
+        Component(stock_upload_service, "Stock Upload Service", "Node.js Class", "Manages stock service integrations and upload workflows")
+        Component(user_service, "User Service", "Node.js Class", "User management, subscription tracking, external system integration")
         Component(download_service, "Download Service", "Node.js Module", "Downloads and manages temporary image files")
-        Component(mock_service, "Mock Image Service", "Node.js Module", "Provides fallback stock images")
-        Component(user_service, "User Service", "Node.js Class", "User management and session handling")
-        Component(config_manager, "Configuration Manager", "dotenv", "Manages environment variables and API keys")
+        Component(mock_service, "Mock Image Service", "Node.js Module", "Provides fallback stock images for demo/error cases")
+    }
+    
+    Container_Boundary(ai_providers, "AI Providers Layer") {
+        Component(openai_service, "OpenAI Service", "Node.js Class", "DALL-E 3/2 integration with OpenAI API")
+        Component(juggernaut_service, "Juggernaut Pro Flux", "Node.js Class", "Segmind API integration for Juggernaut Pro Flux model")
+        Component(seedream_service, "Seedream V3 Service", "Node.js Class", "Segmind API integration for Seedream V3 model")
+        Component(hidream_service, "HiDream-I1 Fast Service", "Node.js Class", "Segmind API integration for HiDream-I1 Fast model")
     }
     
     Container_Boundary(data_layer, "Data Layer") {
         ComponentDb(temp_storage, "Temporary File Storage", "Local Filesystem", "Stores downloaded images temporarily")
-        ComponentDb(database, "Database", "MongoDB", "Persistent user data and image metadata")
+        ComponentDb(database, "Database", "MongoDB", "Persistent storage: users, images, payments, webhooks, configurations, audit logs")
+    }
+    
+    Container_Boundary(data_models, "Data Models") {
+        Component(user_model, "User Model", "Mongoose Schema", "User data with subscription info and external system mapping")
+        Component(image_model, "Image Model", "Mongoose Schema", "Image metadata, generation details, upload status")
+        Component(payment_model, "Payment Model", "Mongoose Schema", "Payment transactions, subscription management")
+        Component(webhook_model, "WebhookLog Model", "Mongoose Schema", "Payment webhook logs and processing status")
+        Component(config_model, "AppConfig Model", "Mongoose Schema", "Dynamic configuration with versioning and audit")
+        Component(audit_model, "ConfigAuditLog Model", "Mongoose Schema", "Configuration change history and audit trail")
     }
 }
 
 System_Boundary(openai_system, "OpenAI Platform") {
     Container(openai_api, "OpenAI Images API", "REST API", "DALL-E 3/2 image generation service")
+}
+
+System_Boundary(segmind_system, "Segmind Platform") {
+    Container(segmind_api, "Segmind API", "REST API", "Multiple AI models: Juggernaut Pro Flux, Seedream V3, HiDream-I1 Fast")
 }
 
 System_Boundary(external_images, "External Image Sources") {
@@ -53,12 +80,19 @@ System_Boundary(stock_platform, "123RF Platform") {
 }
 
 ' User interactions with frontend interfaces
-Rel(user, telegram_bot, "Sends prompts, receives images", "Telegram Messages")
+Rel(user, telegram_bot, "Sends prompts, manages payments, configures 123RF", "Telegram Messages")
 Rel(user, web_interface, "Web requests", "HTTPS", "Future")
 
+' Admin interactions
+Rel(admin, api_routes, "System administration", "REST API")
+
 ' Frontend to Telegram Platform
-Rel(telegram_bot, telegram_api, "Polls messages, sends images", "HTTPS/Webhook")
+Rel(telegram_bot, telegram_api, "Polls messages, sends images, payment notifications", "HTTPS/Webhook")
 Rel(telegram_api, telegram_bot, "Delivers user messages", "HTTPS")
+
+' Payment System Integration
+Rel(yoomoney_api, api_routes, "Payment webhooks", "HTTPS POST")
+Rel(payment_service, yoomoney_api, "Create payments, check status", "HTTPS")
 
 ' Frontend interfaces to Backend API
 Rel(telegram_bot, api_routes, "HTTP requests", "REST API")
@@ -68,39 +102,64 @@ Rel(web_interface, api_routes, "HTTP requests", "REST API", "Future")
 Rel(api_routes, middleware, "Request processing", "Express pipeline")
 Rel(middleware, controllers, "Validated requests", "Function calls")
 Rel(controllers, image_service, "Image generation", "Service calls")
+Rel(controllers, payment_service, "Payment operations", "Service calls")
+Rel(controllers, config_service, "Configuration management", "Service calls")
 Rel(controllers, ftp_service, "Upload requests", "Service calls")
 Rel(controllers, user_service, "User operations", "Service calls")
+Rel(controllers, stock_upload_service, "Stock upload orchestration", "Service calls")
 
 ' API Configuration
 Rel(api_routes, api_config, "Uses configuration", "Config access")
-Rel(middleware, api_config, "CORS, rate limits", "Config access")
+Rel(middleware, api_config, "CORS, rate limits, health checks", "Config access")
 
 ' Core Services interactions
-Rel(image_service, openai_api, "Generate images", "HTTPS/REST API")
+Rel(image_service, openai_service, "Generate with DALL-E", "Service calls")
+Rel(image_service, juggernaut_service, "Generate with Juggernaut Pro Flux", "Service calls")
+Rel(image_service, seedream_service, "Generate with Seedream V3", "Service calls")
+Rel(image_service, hidream_service, "Generate with HiDream-I1 Fast", "Service calls")
 Rel(image_service, download_service, "Download images", "Service calls")
 Rel(image_service, mock_service, "Get fallback images", "Service calls")
 
+Rel(stock_upload_service, ftp_service, "Upload to 123RF", "Service calls")
 Rel(ftp_service, ftp_server, "Upload images", "FTP Protocol")
 Rel(ftp_service, temp_storage, "Read image files", "File I/O")
+
+Rel(payment_service, user_service, "Update subscriptions", "Service calls")
+Rel(config_service, image_service, "AI model configuration", "Service calls")
 
 Rel(download_service, stock_images, "Download stock images", "HTTPS")
 Rel(download_service, temp_storage, "Store/retrieve files", "File I/O")
 
 Rel(mock_service, stock_images, "Get fallback URLs", "Configuration")
 
-Rel(user_service, database, "User data persistence", "Database queries")
-
-' Configuration access
-Rel(image_service, config_manager, "Read API keys", "Config access")
-Rel(ftp_service, config_manager, "Read FTP credentials", "Config access")
-Rel(api_config, config_manager, "Read API configuration", "Config access")
-Rel(controllers, config_manager, "Read app settings", "Config access")
+' AI Providers to External APIs
+Rel(openai_service, openai_api, "Generate images", "HTTPS/REST API")
+Rel(juggernaut_service, segmind_api, "Generate with Juggernaut Pro Flux", "HTTPS/REST API")
+Rel(seedream_service, segmind_api, "Generate with Seedream V3", "HTTPS/REST API")
+Rel(hidream_service, segmind_api, "Generate with HiDream-I1 Fast", "HTTPS/REST API")
 
 ' Data layer relationships
+Rel(user_service, user_model, "User CRUD operations", "Database queries")
+Rel(image_service, image_model, "Image metadata storage", "Database queries")
+Rel(payment_service, payment_model, "Payment transactions", "Database queries")
+Rel(payment_service, webhook_model, "Webhook logging", "Database queries")
+Rel(config_service, config_model, "Configuration management", "Database queries")
+Rel(config_service, audit_model, "Audit logging", "Database queries")
+
+Rel(user_model, database, "Persistent storage", "MongoDB")
+Rel(image_model, database, "Persistent storage", "MongoDB")
+Rel(payment_model, database, "Persistent storage", "MongoDB")
+Rel(webhook_model, database, "Persistent storage", "MongoDB")
+Rel(config_model, database, "Persistent storage", "MongoDB")
+Rel(audit_model, database, "Persistent storage", "MongoDB")
+
 Rel(image_service, temp_storage, "Store generated images", "File I/O")
 
 ' External API responses
-Rel(openai_api, image_service, "Return image URLs", "HTTPS Response")
+Rel(openai_api, openai_service, "Return image URLs/data", "HTTPS Response")
+Rel(segmind_api, juggernaut_service, "Return image data", "HTTPS Response")
+Rel(segmind_api, seedream_service, "Return image data", "HTTPS Response")
+Rel(segmind_api, hidream_service, "Return image data", "HTTPS Response")
 
 ' 123RF Platform interactions
 Rel(ftp_server, rf_web_interface, "Process uploaded images", "Internal transfer")
@@ -109,55 +168,80 @@ SHOW_LEGEND()
 
 note as N1
   **Architecture Benefits:**
-  • Modular backend services architecture
-  • Multiple frontend interfaces support
+  • Modular microservices architecture
+  • Multiple AI providers with fallback strategies
+  • Integrated payment and subscription system
+  • Dynamic configuration management
+  • Comprehensive admin interface
   • Scalable API Gateway pattern
-  • Centralized user management
-  • Persistent data storage
+  • Persistent data storage with audit trails
   • Clear separation of concerns
-  • Simplified architecture
 end note
 
 note as N2
   **Backend API Features:**
-  • RESTful API design
+  • RESTful API design with 40+ endpoints
   • Express.js routing system
-  • Request validation middleware
-  • Error handling & logging
-  • CORS configuration
-  • Rate limiting protection
+  • Multi-layer middleware pipeline
+  • Subscription-based access control
+  • Payment webhook processing
+  • Dynamic AI model switching
+  • Configuration versioning & audit
   • Health check endpoints
-  • Modular controller architecture
-end note
-
-note as N5
-  **API Endpoints:**
-  • POST /api/images/generate
-  • POST /api/upload/123rf
-  • GET/POST /api/users
-  • GET /api/images/:userId
-  • GET /api/health
-  • Error responses with codes
+  • Rate limiting & security
 end note
 
 note as N3
-  **Future Expansion:**
-  • Web interface for browser users
-  • User authentication system
-  • Image history and favorites
-  • Batch processing capabilities
-  • Analytics and reporting
-  • API rate limiting
+  **Payment System:**
+  • YooMoney integration
+  • Automatic subscription management
+  • Webhook-based payment confirmation
+  • Multiple pricing tiers
+  • Real-time balance tracking
+  • Payment history and audit
+  • Telegram notifications
 end note
 
 note as N4
-  **Deployment Options:**
-  • Microservices with Docker
-  • Kubernetes orchestration
-  • MongoDB for persistence
-  • Load balancer for API Gateway
+  **AI Generation System:**
+  • 4 AI models with intelligent fallbacks
+  • Juggernaut Pro Flux (default)
+  • DALL-E 3 (OpenAI)
+  • Seedream V3 & HiDream-I1 Fast (Segmind)
+  • Dynamic model switching
+  • Quality optimization for stock images
+  • Error handling and retry logic
+end note
+
+note as N5
+  **API Endpoints Overview:**
+  **Images:** POST /generate, GET /user/:userId, GET /:imageId/file
+  **Upload:** POST /123rf, GET /status/:imageId, POST /retry
+  **Users:** POST /, GET /:userId, PUT /subscription, GET /stats
+  **Payments:** POST /create, POST /webhook, GET /plans, GET /history
+  **Admin:** GET /config, PUT /config, POST /config/reload, PUT /config/model
+end note
+
+note as N6
+  **Future Expansion:**
+  • Web interface for browser users
+  • Additional stock platforms
+  • Advanced analytics dashboard
+  • Batch processing capabilities
+  • API rate limiting tiers
+  • Multi-language support
+  • Advanced user roles
+end note
+
+note as N7
+  **Deployment & Infrastructure:**
+  • Docker containerization
+  • MongoDB with initialization
+  • Health checks for all services
+  • Environment-based configuration
   • Horizontal scaling support
-  • Simple deployment without caching layer
+  • Development tools (Mongo Express)
+  • Production-ready setup
 end note
 
 @enduml
