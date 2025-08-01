@@ -244,13 +244,25 @@ bot.onText(/\/start/, async (msg) => {
 *📤 Возможности:*
 • Генерация изображений по текстовому описанию
 • Автоматическая загрузка на 123RF
-• Управление настройками стокового сервиса
+• Управление настройками стокового сервиса`;
 
-*Команды:*
-/help - справка по использованию
-/mystocks - управление стоковым сервисом`;
+    const menuKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "📖 Справка", callback_data: "menu_help" },
+          { text: "💰 Баланс", callback_data: "menu_balance" }
+        ],
+        [
+          { text: "💳 Купить изображения", callback_data: "menu_buy" },
+          { text: "⚙️ Мои стоки", callback_data: "menu_mystocks" }
+        ]
+      ]
+    };
 
-    await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+    await bot.sendMessage(chatId, welcomeMessage, { 
+      parse_mode: 'Markdown',
+      reply_markup: menuKeyboard
+    });
 
     // Check if user has active subscription FIRST
     const subscription = await backendApi.getUserSubscription(user.id);
@@ -663,8 +675,17 @@ bot.on('callback_query', async (callbackQuery) => {
     // Initialize user
     const user = await initializeUser(callbackQuery.from);
     
+    // Handle menu buttons
+    if (data === 'menu_help') {
+      await handleHelpCommand(chatId, user);
+    } else if (data === 'menu_balance') {
+      await handleBalanceCommand(chatId, user);
+    } else if (data === 'menu_buy') {
+      await showPaymentPlans(chatId, user.id, callbackQuery.from.id);
+    } else if (data === 'menu_mystocks') {
+      await handleMyStocksCommand(chatId, user);
     // Handle different callback data
-    if (data === 'setup_123rf') {
+    } else if (data === 'setup_123rf') {
       await handleStockSetup(chatId, userId, user.id, '123rf');
     // } else if (data === 'setup_shutterstock') {
     //   await handleStockSetup(chatId, userId, user.id, 'shutterstock');
@@ -1764,6 +1785,156 @@ async function handleCancelSetup(callbackQuery, user) {
   } catch (error) {
     console.error('Error in handleCancelSetup:', error.message);
     await bot.sendMessage(chatId, '❌ Настройка отменена.');
+  }
+}
+
+/**
+ * Handle help command from menu button
+ */
+async function handleHelpCommand(chatId, user) {
+  try {
+    // Check subscription first
+    const subscription = await backendApi.getUserSubscription(user.id);
+    
+    if (!subscription.isActive || subscription.imagesRemaining <= 0) {
+      return showPaymentPlans(chatId, user.id, user.externalId,
+        '💳 *Необходимо оплатить тариф*\n\nДля использования бота нужно приобрести один из доступных тарифов:'
+      );
+    }
+    
+    const helpMessage = `📖 *Справка по использованию*
+
+*🤖 AI Модели:*
+• **Juggernaut Pro Flux** (по умолчанию) - профессиональные реалистичные изображения
+• **DALL-E 3** (OpenAI) - высококачественная генерация с отличным пониманием промптов
+• **Seedream V3** - художественная и креативная генерация
+• **HiDream-I1 Fast** - быстрая высококачественная генерация
+
+*Генерация изображений:*
+1. Отправьте текстовое описание изображения
+2. Дождитесь генерации (может занять до 30 секунд)
+3. Загрузите изображение на 123RF
+
+*Настройка стоков:*
+• Используйте /mystocks для управления сервисом 123RF
+• Нужны **nickname** (не email!) и пароль от аккаунта 123RF
+• Можно настроить автоматическую загрузку
+
+*Подписка и оплата:*
+• Используйте /balance для проверки баланса изображений
+• Используйте /buy для покупки изображений
+• Доступны тарифы: 10, 100, 1000, 10000 изображений
+
+*Ограничения:*
+• Промт должен быть текстовым и до 1000 символов
+• Изображения обрабатываются в формате 4000x4000 для загрузки
+• Соблюдайте правила контента стоковой площадки 123RF
+
+*Команды:*
+/start - начать работу
+/mystocks - управление стоковым сервисом
+/balance - проверить баланс изображений
+/buy - купить изображения`;
+
+    await bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Error in handleHelpCommand:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки справки.');
+  }
+}
+
+/**
+ * Handle balance command from menu button
+ */
+async function handleBalanceCommand(chatId, user) {
+  try {
+    const subscription = await backendApi.getUserSubscription(user.id);
+    
+    let message = `💰 Ваш баланс\n\n`;
+    
+    if (subscription.isActive) {
+      message += `✅ Статус: Активная подписка\n`;
+      message += `🖼️ Осталось изображений: ${subscription.imagesRemaining}\n`;
+      
+      if (subscription.expiresAt) {
+        const expiryDate = new Date(subscription.expiresAt);
+        message += `⏰ Действует до: ${expiryDate.toLocaleDateString('ru-RU')}\n`;
+      }
+    } else {
+      message += `❌ Статус: Подписка неактивна\n`;
+      message += `🖼️ Изображений: 0\n\n`;
+      message += `💡 Для генерации изображений необходимо приобрести тариф.`;
+    }
+    
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "💳 Купить изображения", callback_data: "buy_images" }],
+        [{ text: "📊 История платежей", callback_data: "payment_history" }]
+      ]
+    };
+    
+    await bot.sendMessage(chatId, message, {
+      reply_markup: keyboard
+    });
+    
+  } catch (error) {
+    console.error('Error in handleBalanceCommand:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка получения информации о балансе.');
+  }
+}
+
+/**
+ * Handle mystocks command from menu button
+ */
+async function handleMyStocksCommand(chatId, user) {
+  try {
+    // Check subscription first
+    const subscription = await backendApi.getUserSubscription(user.id);
+    if (!subscription.isActive || subscription.imagesRemaining <= 0) {
+      return showPaymentPlans(chatId, user.id, user.externalId,
+        '💳 *Необходимо оплатить тариф*\n\nДля управления стоковыми сервисами нужно приобрести один из доступных тарифов:'
+      );
+    }
+    
+    const stockServices = await backendApi.getStockServices(user.id);
+    
+    let message = `📊 *Управление стоковыми сервисами*\n\n`;
+    
+    const keyboard = {
+      inline_keyboard: []
+    };
+    
+    // 123RF
+    const rf123Status = stockServices.rf123?.enabled ? '✅ Активен' : '❌ Не настроен';
+    message += `🔸 **123RF**: ${rf123Status}\n\n`;
+    
+    if (stockServices.rf123?.enabled) {
+      // Если сервис привязан - показываем кнопки управления
+      message += `Сервис 123RF настроен и готов к работе.`;
+      keyboard.inline_keyboard.push([
+        { text: "👁️ Посмотреть 123RF", callback_data: "view_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "✏️ Изменить данные 123RF", callback_data: "edit_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "🗑️ Удалить 123RF", callback_data: "delete_rf123" }
+      ]);
+    } else {
+      // Если сервис не привязан - показываем только кнопку привязки
+      message += `⚠️ *Сервис не настроен*\nДля генерации изображений необходимо привязать стоковый сервис 123RF.`;
+      keyboard.inline_keyboard.push([
+        { text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }
+      ]);
+    }
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error in handleMyStocksCommand:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки информации о стоков.');
   }
 }
 
