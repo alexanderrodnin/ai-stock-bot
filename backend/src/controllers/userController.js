@@ -9,6 +9,7 @@ const Image = require('../models/Image');
 const stockUploadService = require('../services/stockUploadService');
 const logger = require('../utils/logger');
 const { AppError } = require('../middleware/errorHandler');
+const config = require('../config/config');
 
 class UserController {
 
@@ -65,18 +66,36 @@ class UserController {
 
         return res.status(200).json({
           success: true,
-          data: user.toSafeObject(),
+          data: {
+            user: user.toSafeObject(),
+            isNewUser: false,
+            trialImagesGranted: 0
+          },
           message: 'User retrieved successfully'
         });
       }
 
-      // Create new user
+      // Create new user with trial images
+      const trialImagesCount = config.trial.imagesCount;
+      
       user = new User({
         externalId,
         externalSystem,
         profile,
         preferences,
         metadata,
+        subscription: {
+          plan: 'plan_10',
+          imagesRemaining: trialImagesCount,
+          isActive: true,
+          purchasedAt: new Date()
+        },
+        transactions: [{
+          type: 'credit',
+          amount: trialImagesCount,
+          description: 'Подарочные изображения для нового пользователя',
+          createdAt: new Date()
+        }],
         stats: {
           lastActivity: new Date()
         }
@@ -84,15 +103,20 @@ class UserController {
 
       await user.save();
 
-      logger.info('New user created', {
+      logger.info('New user created with trial images', {
         userId: user.id,
         externalId,
-        externalSystem
+        externalSystem,
+        trialImagesGranted: trialImagesCount
       });
 
       res.status(201).json({
         success: true,
-        data: user.toSafeObject(),
+        data: {
+          user: user.toSafeObject(),
+          isNewUser: true,
+          trialImagesGranted: trialImagesCount
+        },
         message: 'User created successfully'
       });
 

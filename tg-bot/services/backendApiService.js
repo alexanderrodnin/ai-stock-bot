@@ -57,12 +57,16 @@ class BackendApiService {
    * @param {string} userData.externalId External user ID (e.g., Telegram user ID)
    * @param {string} userData.externalSystem External system ('telegram', 'web', etc.)
    * @param {Object} userData.profile User profile data
-   * @returns {Promise<Object>} User object
+   * @returns {Promise<Object>} User object with trial info
    */
   async createOrGetUser(userData) {
     try {
       const response = await this.client.post('/users', userData);
-      return response.data.data;
+      return {
+        user: response.data.data.user,
+        isNewUser: response.data.data.isNewUser || false,
+        trialImagesGranted: response.data.data.trialImagesGranted || 0
+      };
     } catch (error) {
       console.error('Error creating/getting user:', error.message);
       throw new Error(`Failed to create/get user: ${error.message}`);

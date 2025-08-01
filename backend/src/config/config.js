@@ -176,6 +176,11 @@ const config = {
       retryDelay: parseInt(process.env.AI_RETRY_DELAY) || 1000, // 1 second
       backoffMultiplier: parseFloat(process.env.AI_BACKOFF_MULTIPLIER) || 2
     }
+  },
+
+  // Trial subscription configuration
+  trial: {
+    imagesCount: parseInt(process.env.TRIAL_IMAGES_COUNT) || 10
   }
 };
 

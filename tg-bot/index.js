@@ -57,9 +57,9 @@ async function initializeUser(telegramUser) {
       }
     };
 
-    const user = await backendApi.createOrGetUser(userData);
-    console.log(`User initialized: ${user.id} (${user.externalId})`);
-    return user;
+    const result = await backendApi.createOrGetUser(userData);
+    console.log(`User initialized: ${result.user.id} (${result.user.externalId})`);
+    return result;
   } catch (error) {
     console.error('Error initializing user:', error.message);
     throw error;
@@ -229,7 +229,19 @@ bot.onText(/\/start/, async (msg) => {
     }
 
     // Initialize user
-    const user = await initializeUser(msg.from);
+    const { user, isNewUser, trialImagesGranted } = await initializeUser(msg.from);
+    
+    // Show trial images notification for new users
+    if (isNewUser && trialImagesGranted > 0) {
+      const trialMessage = `🎉 *Добро пожаловать в AI Stock Bot!*\n\n` +
+        `🎁 Вам начислено ${trialImagesGranted} подарочных изображений!\n` +
+        `Теперь вы можете сразу начать генерировать изображения.\n\n` +
+        `Используйте команду /generate или просто отправьте текстовое описание изображения.`;
+      
+      await bot.sendMessage(chatId, trialMessage, { 
+        parse_mode: 'Markdown'
+      });
+    }
     
     const welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
 
@@ -301,7 +313,7 @@ bot.onText(/\/help/, async (msg) => {
   
   try {
     // Initialize user and check subscription first
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     const subscription = await backendApi.getUserSubscription(user.id);
     
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
@@ -356,7 +368,7 @@ bot.onText(/\/balance/, async (msg) => {
   const chatId = msg.chat.id;
   
   try {
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     const subscription = await backendApi.getUserSubscription(user.id);
     
     let message = `💰 Ваш баланс\n\n`;
@@ -397,7 +409,7 @@ bot.onText(/\/buy/, async (msg) => {
   const chatId = msg.chat.id;
   
   try {
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     await showPaymentPlans(chatId, user.id, msg.from.id);
   } catch (error) {
     console.error('Error in /buy command:', error.message);
@@ -411,7 +423,7 @@ bot.onText(/\/mystocks/, async (msg) => {
   const chatId = msg.chat.id;
   
   try {
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     
     // Check subscription first
     const subscription = await backendApi.getUserSubscription(user.id);
@@ -511,7 +523,7 @@ bot.on('message', async (msg) => {
     }
 
     // Initialize user
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     
     // Check if user has active subscription FIRST
     const subscription = await backendApi.getUserSubscription(user.id);
@@ -674,7 +686,7 @@ bot.on('callback_query', async (callbackQuery) => {
   
   try {
     // Initialize user
-    const user = await initializeUser(callbackQuery.from);
+    const { user } = await initializeUser(callbackQuery.from);
     
     // Handle menu buttons
     if (data === 'menu_help') {
@@ -768,7 +780,7 @@ async function handleSetupStep(msg, session) {
   
   try {
     // Initialize user to get userId
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     
     switch (session.step) {
       case 'username':
