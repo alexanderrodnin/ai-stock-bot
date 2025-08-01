@@ -246,22 +246,9 @@ bot.onText(/\/start/, async (msg) => {
 • Автоматическая загрузка на 123RF
 • Управление настройками стокового сервиса`;
 
-    const menuKeyboard = {
-      inline_keyboard: [
-        [
-          { text: "📖 Справка", callback_data: "menu_help" },
-          { text: "💰 Баланс", callback_data: "menu_balance" }
-        ],
-        [
-          { text: "💳 Купить изображения", callback_data: "menu_buy" },
-          { text: "⚙️ Мои стоки", callback_data: "menu_mystocks" }
-        ]
-      ]
-    };
-
+    // Send welcome message without menu first
     await bot.sendMessage(chatId, welcomeMessage, { 
-      parse_mode: 'Markdown',
-      reply_markup: menuKeyboard
+      parse_mode: 'Markdown'
     });
 
     // Check if user has active subscription FIRST
@@ -282,9 +269,23 @@ bot.onText(/\/start/, async (msg) => {
       return showStockSetupMenu(chatId, user.id);
     }
 
-    // Both subscription and stocks are ready
+    // Both subscription and stocks are ready - NOW show menu with buttons
+    const menuKeyboard = {
+      inline_keyboard: [
+        [
+          { text: "📖 Справка", callback_data: "menu_help" },
+          { text: "💰 Баланс", callback_data: "menu_balance" }
+        ],
+        [
+          { text: "💳 Купить изображения", callback_data: "menu_buy" },
+          { text: "⚙️ Мои стоки", callback_data: "menu_mystocks" }
+        ]
+      ]
+    };
+
     await bot.sendMessage(chatId, 
-      `✅ Всё готово к работе!\n\n💰 Баланс: ${subscription.imagesRemaining} изображений\n\nОтправьте текстовое описание изображения для начала работы!`
+      `✅ Всё готово к работе!\n\n💰 Баланс: ${subscription.imagesRemaining} изображений\n\nОтправьте текстовое описание изображения для начала работы!`,
+      { reply_markup: menuKeyboard }
     );
   } catch (error) {
     console.error('Error in /start command:', error.message);
