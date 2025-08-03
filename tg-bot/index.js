@@ -231,18 +231,10 @@ bot.onText(/\/start/, async (msg) => {
     // Initialize user
     const { user, isNewUser, trialImagesGranted } = await initializeUser(msg.from);
     
-    // Show trial images notification for new users
-    if (isNewUser && trialImagesGranted > 0) {
-      const trialMessage = `🎉 *Добро пожаловать в AI Stock Bot!*\n\n` +
-        `🎁 Вам начислено ${trialImagesGranted} подарочных изображений!\n` +
-        `Теперь вы можете сразу начать генерировать изображения.\n\n` +
-        `Используйте команду /generate или просто отправьте текстовое описание изображения.`;
-      
-      await bot.sendMessage(chatId, trialMessage, { 
-        parse_mode: 'Markdown'
-      });
-    }
+    // Check if user has any images (including trial images)
+    const subscription = await backendApi.getUserSubscription(user.id);
     
+    // 1. Send welcome message with buttons (if user has images)
     const welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
 
 Я помогу вам генерировать изображения с помощью современных AI моделей и загружать их на стоковую площадку 123RF.
@@ -258,46 +250,60 @@ bot.onText(/\/start/, async (msg) => {
 • Автоматическая загрузка на 123RF
 • Управление настройками стокового сервиса`;
 
-    // Send welcome message without menu first
-    await bot.sendMessage(chatId, welcomeMessage, { 
-      parse_mode: 'Markdown'
-    });
+    if (subscription.isActive && subscription.imagesRemaining > 0) {
+      // User has images - show welcome message with balance and buttons
+      const menuKeyboard = {
+        inline_keyboard: [
+          [
+            { text: "📖 Справка", callback_data: "menu_help" },
+            { text: "💰 Баланс", callback_data: "menu_balance" }
+          ],
+          [
+            { text: "💳 Купить изображения", callback_data: "menu_buy" },
+            { text: "⚙️ Мои стоки", callback_data: "menu_mystocks" }
+          ]
+        ]
+      };
 
-    // Check if user has active subscription FIRST
-    const subscription = await backendApi.getUserSubscription(user.id);
+      const welcomeWithBalance = `${welcomeMessage}\n\n💰 Баланс: ${subscription.imagesRemaining} изображений`;
+      
+      await bot.sendMessage(chatId, welcomeWithBalance, { 
+        parse_mode: 'Markdown',
+        reply_markup: menuKeyboard
+      });
+    } else {
+      // User has no images - show welcome message without buttons
+      await bot.sendMessage(chatId, welcomeMessage, { 
+        parse_mode: 'Markdown'
+      });
+    }
+
+    // 2. Show trial images notification for new users
+    if (isNewUser && trialImagesGranted > 0) {
+      const trialMessage = `🎁 Вам начислено ${trialImagesGranted} подарочных изображений!`;
+      await bot.sendMessage(chatId, trialMessage);
+    }
+
+    // 3. Show payment plans if user has no images
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
       return showPaymentPlans(chatId, user.id, msg.from.id, 
         '💳 *Необходимо оплатить тариф*\n\nДля генерации изображений нужно приобрести один из доступных тарифов:'
       );
     }
 
-    // Only check stocks if subscription is active
+    // 4. Show stock setup warning if stocks are not configured
     const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
     if (!hasActiveStocks) {
       await bot.sendMessage(chatId, 
-        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
+        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать стоковый сервис 123RF.',
         { parse_mode: 'Markdown' }
       );
       return showStockSetupMenu(chatId, user.id);
     }
 
-    // Both subscription and stocks are ready - NOW show menu with buttons
-    const menuKeyboard = {
-      inline_keyboard: [
-        [
-          { text: "📖 Справка", callback_data: "menu_help" },
-          { text: "💰 Баланс", callback_data: "menu_balance" }
-        ],
-        [
-          { text: "💳 Купить изображения", callback_data: "menu_buy" },
-          { text: "⚙️ Мои стоки", callback_data: "menu_mystocks" }
-        ]
-      ]
-    };
-
+    // 5. Everything is ready - show success message
     await bot.sendMessage(chatId, 
-      `✅ Всё готово к работе!\n\n💰 Баланс: ${subscription.imagesRemaining} изображений\n\nОтправьте текстовое описание изображения для начала работы!`,
-      { reply_markup: menuKeyboard }
+      '✅ Всё готово к работе!\n\nОтправьте текстовое описание изображения для начала работы!'
     );
   } catch (error) {
     console.error('Error in /start command:', error.message);
