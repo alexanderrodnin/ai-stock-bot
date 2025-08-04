@@ -7,7 +7,7 @@ const rateLimit = require('express-rate-limit');
 const config = require('../config/config');
 const logger = require('../utils/logger');
 
-// Default rate limiter
+// Default rate limiter - increased for production usage
 const defaultLimiter = rateLimit({
   windowMs: config.rateLimit.windowMs,
   max: config.rateLimit.max,
@@ -35,7 +35,8 @@ const defaultLimiter = rateLimit({
         message: `Too many requests from this IP, please try again after ${config.rateLimit.windowMs / 1000 / 60} minutes.`,
         code: 'RATE_LIMIT_EXCEEDED',
         timestamp: new Date().toISOString(),
-        retryAfter: config.rateLimit.windowMs / 1000
+        retryAfter: config.rateLimit.windowMs / 1000,
+        remaining: 0
       }
     });
   },
@@ -46,51 +47,72 @@ const defaultLimiter = rateLimit({
   }
 });
 
-// Strict rate limiter for image generation (more resource intensive)
+// Production rate limiter for image generation - 100 requests per hour
 const imageGenerationLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 100, // 100 requests per minute (for testing)
+  windowMs: config.imageGeneration?.windowMs || 60 * 60 * 1000, // 1 hour
+  max: config.imageGeneration?.max || 100, // 100 requests per hour
   standardHeaders: true,
   legacyHeaders: false,
   
   message: {
     error: 'Image generation rate limit exceeded',
-    message: 'Too many image generation requests. Please try again in 5 minutes.',
+    message: 'Too many image generation requests. Please try again in 1 hour.',
     code: 'IMAGE_GENERATION_LIMIT_EXCEEDED',
-    retryAfter: 300
+    retryAfter: 3600
   },
 
   handler: (req, res) => {
     logger.warn('Image generation rate limit exceeded', {
       ip: req.ip,
       userAgent: req.get('User-Agent'),
-      prompt: req.body?.prompt?.substring(0, 100)
+      prompt: req.body?.prompt?.substring(0, 100),
+      remainingTime: '1 hour'
     });
 
     res.status(429).json({
       success: false,
       error: {
-        message: 'Too many image generation requests. Please try again in 5 minutes.',
+        message: 'Too many image generation requests. Please try again in 1 hour.',
         code: 'IMAGE_GENERATION_LIMIT_EXCEEDED',
         timestamp: new Date().toISOString(),
-        retryAfter: 300
+        retryAfter: 3600,
+        remaining: 0
       }
     });
   }
 });
 
-// Upload rate limiter
+// Production upload rate limiter - 100 uploads per hour
 const uploadLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, // 10 minutes
-  max: 20, // 20 uploads per 10 minutes
+  windowMs: config.upload?.windowMs || 60 * 60 * 1000, // 1 hour
+  max: config.upload?.max || 100, // 100 uploads per hour
   standardHeaders: true,
   legacyHeaders: false,
   
   message: {
     error: 'Upload rate limit exceeded',
-    message: 'Too many upload requests. Please try again in 10 minutes.',
+    message: 'Too many upload requests. Please try again in 1 hour.',
     code: 'UPLOAD_LIMIT_EXCEEDED',
-    retryAfter: 600
+    retryAfter: 3600
+  },
+
+  handler: (req, res) => {
+    logger.warn('Upload rate limit exceeded', {
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      remainingTime: '1 hour'
+    });
+
+    res.status(429).json({
+      success: false,
+      error: {
+        message: 'Too many upload requests. Please try again in 1 hour.',
+        code: 'UPLOAD_LIMIT_EXCEEDED',
+        timestamp: new Date().toISOString(),
+        retryAfter: 3600,
+        remaining: 0
+      }
+    });
   }
 });
 

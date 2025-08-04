@@ -529,14 +529,14 @@ class ImageService {
       logger.info('Processing image buffer with Sharp', {
         originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
         originalFileSize: imageBuffer.length,
-        targetSize: '4000x4000'
+        targetSize: '4096x4096'
       });
 
       // Process image with sharp
       const processedImage = await sharp(imageBuffer)
         .resize({
-          width: 4000,
-          height: 4000,
+          width: 4096,
+          height: 4096,
           fit: 'cover',
           position: 'center',
           withoutEnlargement: false
@@ -654,15 +654,15 @@ class ImageService {
       logger.info('Processing image with Sharp', {
         originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
         originalFileSize: imageBuffer.length,
-        targetSize: '4000x4000'
+        targetSize: '4096x4096'
       });
 
       // Process image with sharp directly to final file
-      // For 123RF, we need at least 4000x4000 pixels (6 megapixels) with 300 DPI
+      // For 123RF, we need at least 4096x4096 pixels (16.8 megapixels) with 300 DPI
       const processedImage = await sharp(imageBuffer)
         .resize({
-          width: 4000,
-          height: 4000,
+          width: 4096,
+          height: 4096,
           fit: 'cover', // Use cover to maintain aspect ratio and fill the frame
           position: 'center',
           withoutEnlargement: false // Allow enlargement for smaller images

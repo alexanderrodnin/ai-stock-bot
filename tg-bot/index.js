@@ -57,9 +57,9 @@ async function initializeUser(telegramUser) {
       }
     };
 
-    const user = await backendApi.createOrGetUser(userData);
-    console.log(`User initialized: ${user.id} (${user.externalId})`);
-    return user;
+    const result = await backendApi.createOrGetUser(userData);
+    console.log(`User initialized: ${result.user.id} (${result.user.externalId})`);
+    return result;
   } catch (error) {
     console.error('Error initializing user:', error.message);
     throw error;
@@ -110,7 +110,7 @@ async function showSetupHelp(chatId) {
 • Это НЕ ваш email адрес!
 
 *📐 Требования к изображениям:*
-• Минимум 4000x4000 пикселей
+• Минимум 4096x4096 пикселей
 • Формат JPEG высокого качества
 • Качество не менее 300 DPI
 • Соответствие правилам контента 123RF
@@ -145,9 +145,9 @@ async function showSetupHelp(chatId) {
 }
 
 /**
- * Show image actions menu
+ * Show upload-only actions menu (for file message)
  */
-function getImageActionsKeyboard(imageId, userId, availableServices = []) {
+function getUploadOnlyKeyboard(imageId, availableServices = []) {
   const keyboard = [];
   
   // Add upload buttons for each available service
@@ -160,11 +160,17 @@ function getImageActionsKeyboard(imageId, userId, availableServices = []) {
   // if (availableServices.includes('adobeStock')) {
   //   keyboard.push([{ text: "📤 Загрузить на Adobe Stock", callback_data: `upload_adobe_${imageId}` }]);
   // }
-  
-  // Add management buttons
-  keyboard.push([{ text: "⚙️ Настройки стоков", callback_data: "manage_stocks" }]);
 
   return { inline_keyboard: keyboard };
+}
+
+/**
+ * Create filename with metadata for file download
+ */
+function createFilename(imageData, prompt) {
+  const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const promptSnippet = prompt.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_');
+  return `ai_image_${timestamp}_${promptSnippet}_${imageData.id.substring(0, 8)}.jpg`;
 }
 
 /**
@@ -229,50 +235,75 @@ bot.onText(/\/start/, async (msg) => {
     }
 
     // Initialize user
-    const user = await initializeUser(msg.from);
+    const { user, isNewUser, trialImagesGranted } = await initializeUser(msg.from);
     
+    // Check if user has any images (including trial images)
+    const subscription = await backendApi.getUserSubscription(user.id);
+    
+    // 1. Send welcome message with buttons (if user has images)
     const welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
 
-Я помогу вам генерировать изображения с помощью современных AI моделей и загружать их на стоковую площадку 123RF.
+Я помогу вам генерировать изображения с помощью AI и загружать их на площадку стоковых изображений 123RF.
 
-*🤖 Доступные AI модели:*
-• Juggernaut Pro Flux (по умолчанию)
-• DALL-E 3 (OpenAI)
-• Seedream V3
-• HiDream-I1 Fast
+*🤖 AI модель:*
+• Juggernaut Pro Flux
 
 *📤 Возможности:*
 • Генерация изображений по текстовому описанию
-• Автоматическая загрузка на 123RF
-• Управление настройками стокового сервиса
+• Загрузка сервис стоковых фотографий 123RF`;
 
-*Команды:*
-/help - справка по использованию
-/mystocks - управление стоковым сервисом`;
+    if (subscription.isActive && subscription.imagesRemaining > 0) {
+      // User has images - show welcome message with balance and buttons
+      const menuKeyboard = {
+        inline_keyboard: [
+          [
+            { text: "📖 Справка", callback_data: "menu_help" },
+            { text: "💰 Баланс", callback_data: "menu_balance" }
+          ],
+          [
+            { text: "💳 Купить изображения", callback_data: "menu_buy" },
+            { text: "⚙️ Мои стоки", callback_data: "menu_mystocks" }
+          ]
+        ]
+      };
 
-    await bot.sendMessage(chatId, welcomeMessage, { parse_mode: 'Markdown' });
+      await bot.sendMessage(chatId, welcomeMessage, { 
+        parse_mode: 'Markdown',
+        reply_markup: menuKeyboard
+      });
+    } else {
+      // User has no images - show welcome message without buttons
+      await bot.sendMessage(chatId, welcomeMessage, { 
+        parse_mode: 'Markdown'
+      });
+    }
 
-    // Check if user has active subscription FIRST
-    const subscription = await backendApi.getUserSubscription(user.id);
+    // 2. Show trial images notification for new users
+    if (isNewUser && trialImagesGranted > 0) {
+      const trialMessage = `🎁 Вам начислено ${trialImagesGranted} подарочных изображений!`;
+      await bot.sendMessage(chatId, trialMessage);
+    }
+
+    // 3. Show payment plans if user has no images
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
       return showPaymentPlans(chatId, user.id, msg.from.id, 
         '💳 *Необходимо оплатить тариф*\n\nДля генерации изображений нужно приобрести один из доступных тарифов:'
       );
     }
 
-    // Only check stocks if subscription is active
+    // 4. Show stock setup warning if stocks are not configured
     const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
     if (!hasActiveStocks) {
       await bot.sendMessage(chatId, 
-        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
+        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать стоковый сервис 123RF.',
         { parse_mode: 'Markdown' }
       );
       return showStockSetupMenu(chatId, user.id);
     }
 
-    // Both subscription and stocks are ready
+    // 5. Everything is ready - show success message
     await bot.sendMessage(chatId, 
-      `✅ Всё готово к работе!\n\n💰 Баланс: ${subscription.imagesRemaining} изображений\n\nОтправьте текстовое описание изображения для начала работы!`
+      '✅ Всё готово к работе!\n\nОтправьте текстовое описание изображения для начала работы!'
     );
   } catch (error) {
     console.error('Error in /start command:', error.message);
@@ -288,7 +319,7 @@ bot.onText(/\/help/, async (msg) => {
   
   try {
     // Initialize user and check subscription first
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     const subscription = await backendApi.getUserSubscription(user.id);
     
     if (!subscription.isActive || subscription.imagesRemaining <= 0) {
@@ -322,7 +353,7 @@ bot.onText(/\/help/, async (msg) => {
 
 *Ограничения:*
 • Промт должен быть текстовым и до 1000 символов
-• Изображения обрабатываются в формате 4000x4000 для загрузки
+• Изображения обрабатываются в формате 4096x4096 для загрузки
 • Соблюдайте правила контента стоковой площадки 123RF
 
 *Команды:*
@@ -343,7 +374,7 @@ bot.onText(/\/balance/, async (msg) => {
   const chatId = msg.chat.id;
   
   try {
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     const subscription = await backendApi.getUserSubscription(user.id);
     
     let message = `💰 Ваш баланс\n\n`;
@@ -384,7 +415,7 @@ bot.onText(/\/buy/, async (msg) => {
   const chatId = msg.chat.id;
   
   try {
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     await showPaymentPlans(chatId, user.id, msg.from.id);
   } catch (error) {
     console.error('Error in /buy command:', error.message);
@@ -398,7 +429,7 @@ bot.onText(/\/mystocks/, async (msg) => {
   const chatId = msg.chat.id;
   
   try {
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     
     // Check subscription first
     const subscription = await backendApi.getUserSubscription(user.id);
@@ -498,7 +529,7 @@ bot.on('message', async (msg) => {
     }
 
     // Initialize user
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     
     // Check if user has active subscription FIRST
     const subscription = await backendApi.getUserSubscription(user.id);
@@ -544,8 +575,8 @@ bot.on('message', async (msg) => {
       // Get available stock services for this user
       const availableServices = await getAvailableStockServices(user.id);
       
-      // Create caption based on whether it's a fallback/demo image
-      let caption;
+      // Create caption for first message (compressed image)
+      let firstCaption;
       const isFallbackOrDemo = (
         (imageData.usedSource && (imageData.usedSource.includes('Fallback') || imageData.usedSource.includes('Demo'))) ||
         (imageData.fallbackReason && imageData.fallbackReason !== 'None') ||
@@ -554,19 +585,12 @@ bot.on('message', async (msg) => {
       );
       
       if (isFallbackOrDemo) {
-        caption = `🎨 Демо-изображение сгенерировано!\n\n`;
-        caption += `⚠️ *Это тестовое изображение* (OpenAI API недоступен)\n\n`;
+        firstCaption = `🎨 Демо-изображение сгенерировано!\n\n🤖 Модель: ${imageData.model}`;
       } else {
-        caption = `🎨 Изображение сгенерировано!\n\n`;
+        firstCaption = `🎨 Изображение сгенерировано!\n\n🤖 Модель: ${imageData.model}`;
       }
-      caption += `📝 **Промт:** ${prompt}\n`;
-      caption += `🤖 **Модель:** ${imageData.model}\n`;
-      caption += `📐 **Размер:** 4000x4000`;
       
-      // Create inline keyboard with upload options
-      const keyboard = getImageActionsKeyboard(imageData.id, user.id, availableServices);
-      
-      // Store the image data in cache for callback operations (without local path)
+      // Store the image data in cache for callback operations
       userImageCache.set(msg.from.id, {
         imageId: imageData.id,
         prompt: prompt
@@ -574,11 +598,10 @@ bot.on('message', async (msg) => {
       
       console.log(`Stored image data in cache for user ${msg.from.id}: ${imageData.id}`);
       
-      // Send the image using stream directly from backend
+      // 1. Send first message - compressed image without buttons
       await bot.sendPhoto(chatId, imageStream, {
-        caption: caption,
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
+        caption: firstCaption,
+        parse_mode: 'Markdown'
       });
 
       // Delete the processing message (safely)
@@ -587,6 +610,40 @@ bot.on('message', async (msg) => {
       } catch (deleteError) {
         // Ignore deletion errors - message might already be deleted or too old
         console.log('Could not delete processing message:', deleteError.message);
+      }
+
+      // 2. Send second message - file without compression + upload button
+      try {
+        // Get a fresh image stream for the file
+        const imageStreamForFile = await backendApi.getImageStream(imageData.id, user.id);
+        
+        // Create filename with metadata
+        const filename = createFilename(imageData, prompt);
+        
+        // Create caption for file message
+        const fileCaption = `📁 Файл изображения\n\n📝 Промт: ${prompt}\n📐 Размер: 4096x4096`;
+        
+        // Create keyboard with only upload button
+        const uploadKeyboard = getUploadOnlyKeyboard(imageData.id, availableServices);
+        
+        // Send image as document (file) without compression
+        await bot.sendDocument(chatId, imageStreamForFile, {
+          caption: fileCaption,
+          parse_mode: 'Markdown',
+          reply_markup: uploadKeyboard
+        }, {
+          filename: filename,
+          contentType: 'image/jpeg'
+        });
+        
+        console.log(`[Auto File] Sent file ${filename} to user ${msg.from.id}`);
+        
+      } catch (fileError) {
+        console.error('Error sending file automatically:', fileError.message);
+        
+        // If file sending fails, send a message with error and fallback button
+        const errorMessage = `⚠️ Не удалось автоматически отправить файл без сжатия.\n\nВы можете попробовать получить файл позже или обратиться в поддержку.`;
+        await bot.sendMessage(chatId, errorMessage);
       }
       
     } catch (error) {
@@ -661,10 +718,19 @@ bot.on('callback_query', async (callbackQuery) => {
   
   try {
     // Initialize user
-    const user = await initializeUser(callbackQuery.from);
+    const { user } = await initializeUser(callbackQuery.from);
     
+    // Handle menu buttons
+    if (data === 'menu_help') {
+      await handleHelpCommand(chatId, user);
+    } else if (data === 'menu_balance') {
+      await handleBalanceCommand(chatId, user);
+    } else if (data === 'menu_buy') {
+      await showPaymentPlans(chatId, user.id, callbackQuery.from.id);
+    } else if (data === 'menu_mystocks') {
+      await handleMyStocksCommand(chatId, user);
     // Handle different callback data
-    if (data === 'setup_123rf') {
+    } else if (data === 'setup_123rf') {
       await handleStockSetup(chatId, userId, user.id, '123rf');
     // } else if (data === 'setup_shutterstock') {
     //   await handleStockSetup(chatId, userId, user.id, 'shutterstock');
@@ -746,7 +812,7 @@ async function handleSetupStep(msg, session) {
   
   try {
     // Initialize user to get userId
-    const user = await initializeUser(msg.from);
+    const { user } = await initializeUser(msg.from);
     
     switch (session.step) {
       case 'username':
@@ -1153,6 +1219,7 @@ async function handleStockSetup(chatId, telegramUserId, userId, service) {
     reply_markup: keyboard
   });
 }
+
 
 /**
  * Handle image upload to stock service
@@ -1764,6 +1831,156 @@ async function handleCancelSetup(callbackQuery, user) {
   } catch (error) {
     console.error('Error in handleCancelSetup:', error.message);
     await bot.sendMessage(chatId, '❌ Настройка отменена.');
+  }
+}
+
+/**
+ * Handle help command from menu button
+ */
+async function handleHelpCommand(chatId, user) {
+  try {
+    // Check subscription first
+    const subscription = await backendApi.getUserSubscription(user.id);
+    
+    if (!subscription.isActive || subscription.imagesRemaining <= 0) {
+      return showPaymentPlans(chatId, user.id, user.externalId,
+        '💳 *Необходимо оплатить тариф*\n\nДля использования бота нужно приобрести один из доступных тарифов:'
+      );
+    }
+    
+    const helpMessage = `📖 *Справка по использованию*
+
+*🤖 AI Модели:*
+• **Juggernaut Pro Flux** (по умолчанию) - профессиональные реалистичные изображения
+• **DALL-E 3** (OpenAI) - высококачественная генерация с отличным пониманием промптов
+• **Seedream V3** - художественная и креативная генерация
+• **HiDream-I1 Fast** - быстрая высококачественная генерация
+
+*Генерация изображений:*
+1. Отправьте текстовое описание изображения
+2. Дождитесь генерации (может занять до 30 секунд)
+3. Загрузите изображение на 123RF
+
+*Настройка стоков:*
+• Используйте /mystocks для управления сервисом 123RF
+• Нужны **nickname** (не email!) и пароль от аккаунта 123RF
+• Можно настроить автоматическую загрузку
+
+*Подписка и оплата:*
+• Используйте /balance для проверки баланса изображений
+• Используйте /buy для покупки изображений
+• Доступны тарифы: 10, 100, 1000, 10000 изображений
+
+*Ограничения:*
+• Промт должен быть текстовым и до 1000 символов
+• Изображения обрабатываются в формате 4096x4096 для загрузки
+• Соблюдайте правила контента стоковой площадки 123RF
+
+*Команды:*
+/start - начать работу
+/mystocks - управление стоковым сервисом
+/balance - проверить баланс изображений
+/buy - купить изображения`;
+
+    await bot.sendMessage(chatId, helpMessage, { parse_mode: 'Markdown' });
+  } catch (error) {
+    console.error('Error in handleHelpCommand:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки справки.');
+  }
+}
+
+/**
+ * Handle balance command from menu button
+ */
+async function handleBalanceCommand(chatId, user) {
+  try {
+    const subscription = await backendApi.getUserSubscription(user.id);
+    
+    let message = `💰 Ваш баланс\n\n`;
+    
+    if (subscription.isActive) {
+      message += `✅ Статус: Активная подписка\n`;
+      message += `🖼️ Осталось изображений: ${subscription.imagesRemaining}\n`;
+      
+      if (subscription.expiresAt) {
+        const expiryDate = new Date(subscription.expiresAt);
+        message += `⏰ Действует до: ${expiryDate.toLocaleDateString('ru-RU')}\n`;
+      }
+    } else {
+      message += `❌ Статус: Подписка неактивна\n`;
+      message += `🖼️ Изображений: 0\n\n`;
+      message += `💡 Для генерации изображений необходимо приобрести тариф.`;
+    }
+    
+    const keyboard = {
+      inline_keyboard: [
+        [{ text: "💳 Купить изображения", callback_data: "buy_images" }],
+        [{ text: "📊 История платежей", callback_data: "payment_history" }]
+      ]
+    };
+    
+    await bot.sendMessage(chatId, message, {
+      reply_markup: keyboard
+    });
+    
+  } catch (error) {
+    console.error('Error in handleBalanceCommand:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка получения информации о балансе.');
+  }
+}
+
+/**
+ * Handle mystocks command from menu button
+ */
+async function handleMyStocksCommand(chatId, user) {
+  try {
+    // Check subscription first
+    const subscription = await backendApi.getUserSubscription(user.id);
+    if (!subscription.isActive || subscription.imagesRemaining <= 0) {
+      return showPaymentPlans(chatId, user.id, user.externalId,
+        '💳 *Необходимо оплатить тариф*\n\nДля управления стоковыми сервисами нужно приобрести один из доступных тарифов:'
+      );
+    }
+    
+    const stockServices = await backendApi.getStockServices(user.id);
+    
+    let message = `📊 *Управление стоковыми сервисами*\n\n`;
+    
+    const keyboard = {
+      inline_keyboard: []
+    };
+    
+    // 123RF
+    const rf123Status = stockServices.rf123?.enabled ? '✅ Активен' : '❌ Не настроен';
+    message += `🔸 **123RF**: ${rf123Status}\n\n`;
+    
+    if (stockServices.rf123?.enabled) {
+      // Если сервис привязан - показываем кнопки управления
+      message += `Сервис 123RF настроен и готов к работе.`;
+      keyboard.inline_keyboard.push([
+        { text: "👁️ Посмотреть 123RF", callback_data: "view_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "✏️ Изменить данные 123RF", callback_data: "edit_rf123" }
+      ]);
+      keyboard.inline_keyboard.push([
+        { text: "🗑️ Удалить 123RF", callback_data: "delete_rf123" }
+      ]);
+    } else {
+      // Если сервис не привязан - показываем только кнопку привязки
+      message += `⚠️ *Сервис не настроен*\nДля генерации изображений необходимо привязать стоковый сервис 123RF.`;
+      keyboard.inline_keyboard.push([
+        { text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }
+      ]);
+    }
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown',
+      reply_markup: keyboard
+    });
+  } catch (error) {
+    console.error('Error in handleMyStocksCommand:', error.message);
+    await bot.sendMessage(chatId, '❌ Ошибка загрузки информации о стоков.');
   }
 }
 
