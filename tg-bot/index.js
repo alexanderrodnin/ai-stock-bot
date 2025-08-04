@@ -161,6 +161,9 @@ function getImageActionsKeyboard(imageId, userId, availableServices = []) {
   //   keyboard.push([{ text: "📤 Загрузить на Adobe Stock", callback_data: `upload_adobe_${imageId}` }]);
   // }
   
+  // Add download file button
+  keyboard.push([{ text: "📁 Получить файлом", callback_data: `download_file_${imageId}` }]);
+  
   // Add management buttons
   keyboard.push([{ text: "⚙️ Настройки стоков", callback_data: "manage_stocks" }]);
 
@@ -740,6 +743,8 @@ bot.on('callback_query', async (callbackQuery) => {
       await handleCancelSetup(callbackQuery, user);
     } else if (data.startsWith('upload_')) {
       await handleImageUpload(callbackQuery, user);
+    } else if (data.startsWith('download_file_')) {
+      await handleDownloadFile(callbackQuery, user);
     } else if (data === 'buy_images') {
       await showPaymentPlans(chatId, user.id, callbackQuery.from.id);
     } else if (data === 'payment_history') {
@@ -1192,6 +1197,77 @@ async function handleStockSetup(chatId, telegramUserId, userId, service) {
   await bot.sendMessage(chatId, message, { 
     reply_markup: keyboard
   });
+}
+
+/**
+ * Handle download file request
+ */
+async function handleDownloadFile(callbackQuery, user) {
+  const chatId = callbackQuery.message.chat.id;
+  const data = callbackQuery.data;
+  const telegramUserId = callbackQuery.from.id;
+  
+  // Parse callback data: download_file_imageId
+  const parts = data.split('_');
+  const imageId = parts[2]; // download_file_{imageId}
+  
+  // Check if we have the image data in cache
+  const imageData = userImageCache.get(telegramUserId);
+  if (!imageData || imageData.imageId !== imageId) {
+    return bot.sendMessage(chatId, 
+      '❌ Изображение больше недоступно. Сгенерируйте новое изображение.'
+    );
+  }
+  
+  const statusMessage = await bot.sendMessage(chatId, 
+    '📁 Подготавливаю файл для скачивания...'
+  );
+  
+  try {
+    // Get image stream from backend
+    const imageStream = await backendApi.getImageStream(imageId, user.id);
+    
+    // Create filename with timestamp and prompt info
+    const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+    const promptSnippet = imageData.prompt.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `ai_image_${timestamp}_${promptSnippet}_${imageId.substring(0, 8)}.jpg`;
+    
+    // Delete status message
+    await bot.deleteMessage(chatId, statusMessage.message_id);
+    
+    // Send image as document (file) without compression
+    await bot.sendDocument(chatId, imageStream, {
+      caption: `📁 **Файл изображения**\n\n📝 **Промт:** ${imageData.prompt}\n📐 **Размер:** 4096x4096\n💾 **Формат:** JPEG (без сжатия)`,
+      parse_mode: 'Markdown'
+    }, {
+      filename: filename,
+      contentType: 'image/jpeg'
+    });
+    
+    console.log(`[Download File] Sent file ${filename} to user ${telegramUserId}`);
+    
+  } catch (error) {
+    console.error('Error downloading file:', error.message);
+    
+    // Try to delete status message if it still exists
+    try {
+      await bot.deleteMessage(chatId, statusMessage.message_id);
+    } catch (deleteError) {
+      // Ignore deletion errors
+    }
+    
+    let errorMessage = '❌ Не удалось подготовить файл для скачивания. ';
+    
+    if (error.message.includes('Failed to get image stream')) {
+      errorMessage += 'Изображение недоступно.';
+    } else if (error.message.includes('file size')) {
+      errorMessage += 'Файл слишком большой для отправки.';
+    } else {
+      errorMessage += 'Попробуйте позже.';
+    }
+    
+    await bot.sendMessage(chatId, errorMessage);
+  }
 }
 
 /**
