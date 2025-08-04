@@ -243,18 +243,14 @@ bot.onText(/\/start/, async (msg) => {
     // 1. Send welcome message with buttons (if user has images)
     const welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
 
-Я помогу вам генерировать изображения с помощью современных AI моделей и загружать их на стоковую площадку 123RF.
+Я помогу вам генерировать изображения с помощью AI и загружать их на площадку стоковых изображений 123RF.
 
-*🤖 Доступные AI модели:*
-• Juggernaut Pro Flux (по умолчанию)
-• DALL-E 3 (OpenAI)
-• Seedream V3
-• HiDream-I1 Fast
+*🤖 AI модель:*
+• Juggernaut Pro Flux
 
 *📤 Возможности:*
 • Генерация изображений по текстовому описанию
-• Автоматическая загрузка на 123RF
-• Управление настройками стокового сервиса`;
+• Загрузка сервис стоковых фотографий 123RF`;
 
     if (subscription.isActive && subscription.imagesRemaining > 0) {
       // User has images - show welcome message with balance and buttons
@@ -271,9 +267,7 @@ bot.onText(/\/start/, async (msg) => {
         ]
       };
 
-      const welcomeWithBalance = `${welcomeMessage}\n\n💰 Баланс: ${subscription.imagesRemaining} изображений`;
-      
-      await bot.sendMessage(chatId, welcomeWithBalance, { 
+      await bot.sendMessage(chatId, welcomeMessage, { 
         parse_mode: 'Markdown',
         reply_markup: menuKeyboard
       });
