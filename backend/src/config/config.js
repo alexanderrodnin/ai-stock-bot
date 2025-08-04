@@ -73,9 +73,21 @@ const config = {
   // Rate limiting configuration
   rateLimit: {
     windowMs: parseInt(process.env.RATE_LIMIT_WINDOW) || 15 * 60 * 1000, // 15 minutes
-    max: parseInt(process.env.RATE_LIMIT_MAX) || 100, // 100 requests per window
+    max: parseInt(process.env.RATE_LIMIT_MAX) || 400, // 400 requests per window (increased for production)
     standardHeaders: true,
     legacyHeaders: false
+  },
+
+  // Image generation rate limiting (production settings)
+  imageGeneration: {
+    windowMs: parseInt(process.env.IMAGE_GENERATION_WINDOW) || 60 * 60 * 1000, // 1 hour
+    max: parseInt(process.env.IMAGE_GENERATION_MAX) || 100 // 100 requests per hour
+  },
+
+  // Upload rate limiting (production settings)
+  upload: {
+    windowMs: parseInt(process.env.UPLOAD_WINDOW) || 60 * 60 * 1000, // 1 hour
+    max: parseInt(process.env.UPLOAD_MAX) || 100 // 100 uploads per hour
   },
 
   // CORS configuration

@@ -316,16 +316,31 @@ docker-compose down -v
 - **Webhook валидация** с криптографическими подписями
 - **Environment variables** для API ключей
 
-#### Rate Limiting
+#### Rate Limiting (Обновлено для продакшена)
 ```javascript
-// Ограничения по endpoints
-Общий API: 100 requests / 15 minutes
-Генерация изображений: 10 requests / 5 minutes
-Загрузки на стоки: 20 requests / 10 minutes
+// Ограничения по endpoints (Production Settings)
+Общий API: 400 requests / 15 minutes
+Генерация изображений: 100 requests / 1 hour
+Загрузки на стоки: 100 requests / 1 hour
 Создание аккаунтов: 5 requests / hour
-Платежи: 30 requests / 15 minutes
-Admin API: 50 requests / 15 minutes
 ```
+
+**Переменные окружения для настройки:**
+```bash
+# Общие лимиты API
+RATE_LIMIT_WINDOW=900000        # 15 минут
+RATE_LIMIT_MAX=400              # 400 запросов
+
+# Генерация изображений
+IMAGE_GENERATION_WINDOW=3600000 # 1 час
+IMAGE_GENERATION_MAX=100        # 100 генераций
+
+# Загрузка на стоки
+UPLOAD_WINDOW=3600000           # 1 час
+UPLOAD_MAX=100                  # 100 загрузок
+```
+
+**Подробная документация по Rate Limiting:** [Backend API Guide - Безопасность](backend/README.md#-безопасность)
 
 #### Валидация и санитизация
 - **express-validator** для входных данных
