@@ -66,6 +66,13 @@ services:
       - PAYMENT_PLAN_4_IMAGES=${PAYMENT_PLAN_4_IMAGES}
       # Trial Configuration
       - TRIAL_IMAGES_COUNT=${TRIAL_IMAGES_COUNT}
+      # Rate Limiting Configuration
+      - RATE_LIMIT_WINDOW=${RATE_LIMIT_WINDOW}
+      - RATE_LIMIT_MAX=${RATE_LIMIT_MAX}
+      - IMAGE_GENERATION_WINDOW=${IMAGE_GENERATION_WINDOW}
+      - IMAGE_GENERATION_MAX=${IMAGE_GENERATION_MAX}
+      - UPLOAD_WINDOW=${UPLOAD_WINDOW}
+      - UPLOAD_MAX=${UPLOAD_MAX}
     volumes:
       # Mount source code for development hot reload
       - ./backend/src:/app/src
