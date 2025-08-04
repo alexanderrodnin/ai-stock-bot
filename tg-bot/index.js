@@ -145,9 +145,9 @@ async function showSetupHelp(chatId) {
 }
 
 /**
- * Show image actions menu
+ * Show upload-only actions menu (for file message)
  */
-function getImageActionsKeyboard(imageId, userId, availableServices = []) {
+function getUploadOnlyKeyboard(imageId, availableServices = []) {
   const keyboard = [];
   
   // Add upload buttons for each available service
@@ -160,14 +160,17 @@ function getImageActionsKeyboard(imageId, userId, availableServices = []) {
   // if (availableServices.includes('adobeStock')) {
   //   keyboard.push([{ text: "📤 Загрузить на Adobe Stock", callback_data: `upload_adobe_${imageId}` }]);
   // }
-  
-  // Add download file button
-  keyboard.push([{ text: "📁 Получить файлом", callback_data: `download_file_${imageId}` }]);
-  
-  // Add management buttons
-  keyboard.push([{ text: "⚙️ Настройки стоков", callback_data: "manage_stocks" }]);
 
   return { inline_keyboard: keyboard };
+}
+
+/**
+ * Create filename with metadata for file download
+ */
+function createFilename(imageData, prompt) {
+  const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const promptSnippet = prompt.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_');
+  return `ai_image_${timestamp}_${promptSnippet}_${imageData.id.substring(0, 8)}.jpg`;
 }
 
 /**
@@ -578,8 +581,8 @@ bot.on('message', async (msg) => {
       // Get available stock services for this user
       const availableServices = await getAvailableStockServices(user.id);
       
-      // Create caption based on whether it's a fallback/demo image
-      let caption;
+      // Create caption for first message (compressed image)
+      let firstCaption;
       const isFallbackOrDemo = (
         (imageData.usedSource && (imageData.usedSource.includes('Fallback') || imageData.usedSource.includes('Demo'))) ||
         (imageData.fallbackReason && imageData.fallbackReason !== 'None') ||
@@ -588,19 +591,12 @@ bot.on('message', async (msg) => {
       );
       
       if (isFallbackOrDemo) {
-        caption = `🎨 Демо-изображение сгенерировано!\n\n`;
-        caption += `⚠️ *Это тестовое изображение* (OpenAI API недоступен)\n\n`;
+        firstCaption = `🎨 Демо-изображение сгенерировано!\n\n🤖 Модель: ${imageData.model}`;
       } else {
-        caption = `🎨 Изображение сгенерировано!\n\n`;
+        firstCaption = `🎨 Изображение сгенерировано!\n\n🤖 Модель: ${imageData.model}`;
       }
-      caption += `📝 **Промт:** ${prompt}\n`;
-      caption += `🤖 **Модель:** ${imageData.model}\n`;
-      caption += `📐 **Размер:** 4096x4096`;
       
-      // Create inline keyboard with upload options
-      const keyboard = getImageActionsKeyboard(imageData.id, user.id, availableServices);
-      
-      // Store the image data in cache for callback operations (without local path)
+      // Store the image data in cache for callback operations
       userImageCache.set(msg.from.id, {
         imageId: imageData.id,
         prompt: prompt
@@ -608,11 +604,10 @@ bot.on('message', async (msg) => {
       
       console.log(`Stored image data in cache for user ${msg.from.id}: ${imageData.id}`);
       
-      // Send the image using stream directly from backend
+      // 1. Send first message - compressed image without buttons
       await bot.sendPhoto(chatId, imageStream, {
-        caption: caption,
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
+        caption: firstCaption,
+        parse_mode: 'Markdown'
       });
 
       // Delete the processing message (safely)
@@ -621,6 +616,40 @@ bot.on('message', async (msg) => {
       } catch (deleteError) {
         // Ignore deletion errors - message might already be deleted or too old
         console.log('Could not delete processing message:', deleteError.message);
+      }
+
+      // 2. Send second message - file without compression + upload button
+      try {
+        // Get a fresh image stream for the file
+        const imageStreamForFile = await backendApi.getImageStream(imageData.id, user.id);
+        
+        // Create filename with metadata
+        const filename = createFilename(imageData, prompt);
+        
+        // Create caption for file message
+        const fileCaption = `📁 Файл изображения\n\n📝 Промт: ${prompt}\n📐 Размер: 4096x4096`;
+        
+        // Create keyboard with only upload button
+        const uploadKeyboard = getUploadOnlyKeyboard(imageData.id, availableServices);
+        
+        // Send image as document (file) without compression
+        await bot.sendDocument(chatId, imageStreamForFile, {
+          caption: fileCaption,
+          parse_mode: 'Markdown',
+          reply_markup: uploadKeyboard
+        }, {
+          filename: filename,
+          contentType: 'image/jpeg'
+        });
+        
+        console.log(`[Auto File] Sent file ${filename} to user ${msg.from.id}`);
+        
+      } catch (fileError) {
+        console.error('Error sending file automatically:', fileError.message);
+        
+        // If file sending fails, send a message with error and fallback button
+        const errorMessage = `⚠️ Не удалось автоматически отправить файл без сжатия.\n\nВы можете попробовать получить файл позже или обратиться в поддержку.`;
+        await bot.sendMessage(chatId, errorMessage);
       }
       
     } catch (error) {
@@ -743,8 +772,6 @@ bot.on('callback_query', async (callbackQuery) => {
       await handleCancelSetup(callbackQuery, user);
     } else if (data.startsWith('upload_')) {
       await handleImageUpload(callbackQuery, user);
-    } else if (data.startsWith('download_file_')) {
-      await handleDownloadFile(callbackQuery, user);
     } else if (data === 'buy_images') {
       await showPaymentPlans(chatId, user.id, callbackQuery.from.id);
     } else if (data === 'payment_history') {
@@ -1199,76 +1226,6 @@ async function handleStockSetup(chatId, telegramUserId, userId, service) {
   });
 }
 
-/**
- * Handle download file request
- */
-async function handleDownloadFile(callbackQuery, user) {
-  const chatId = callbackQuery.message.chat.id;
-  const data = callbackQuery.data;
-  const telegramUserId = callbackQuery.from.id;
-  
-  // Parse callback data: download_file_imageId
-  const parts = data.split('_');
-  const imageId = parts[2]; // download_file_{imageId}
-  
-  // Check if we have the image data in cache
-  const imageData = userImageCache.get(telegramUserId);
-  if (!imageData || imageData.imageId !== imageId) {
-    return bot.sendMessage(chatId, 
-      '❌ Изображение больше недоступно. Сгенерируйте новое изображение.'
-    );
-  }
-  
-  const statusMessage = await bot.sendMessage(chatId, 
-    '📁 Подготавливаю файл для скачивания...'
-  );
-  
-  try {
-    // Get image stream from backend
-    const imageStream = await backendApi.getImageStream(imageId, user.id);
-    
-    // Create filename with timestamp and prompt info
-    const timestamp = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const promptSnippet = imageData.prompt.substring(0, 30).replace(/[^a-zA-Z0-9]/g, '_');
-    const filename = `ai_image_${timestamp}_${promptSnippet}_${imageId.substring(0, 8)}.jpg`;
-    
-    // Delete status message
-    await bot.deleteMessage(chatId, statusMessage.message_id);
-    
-    // Send image as document (file) without compression
-    await bot.sendDocument(chatId, imageStream, {
-      caption: `📁 **Файл изображения**\n\n📝 **Промт:** ${imageData.prompt}\n📐 **Размер:** 4096x4096\n💾 **Формат:** JPEG (без сжатия)`,
-      parse_mode: 'Markdown'
-    }, {
-      filename: filename,
-      contentType: 'image/jpeg'
-    });
-    
-    console.log(`[Download File] Sent file ${filename} to user ${telegramUserId}`);
-    
-  } catch (error) {
-    console.error('Error downloading file:', error.message);
-    
-    // Try to delete status message if it still exists
-    try {
-      await bot.deleteMessage(chatId, statusMessage.message_id);
-    } catch (deleteError) {
-      // Ignore deletion errors
-    }
-    
-    let errorMessage = '❌ Не удалось подготовить файл для скачивания. ';
-    
-    if (error.message.includes('Failed to get image stream')) {
-      errorMessage += 'Изображение недоступно.';
-    } else if (error.message.includes('file size')) {
-      errorMessage += 'Файл слишком большой для отправки.';
-    } else {
-      errorMessage += 'Попробуйте позже.';
-    }
-    
-    await bot.sendMessage(chatId, errorMessage);
-  }
-}
 
 /**
  * Handle image upload to stock service
