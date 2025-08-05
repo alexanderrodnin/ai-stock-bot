@@ -4,6 +4,7 @@
 
 ## 📋 Содержание
 
+- [Подключение к базе данных](#подключение-к-базе-данных)
 - [Обзор архитектуры](#обзор-архитектуры)
 - [Коллекции базы данных](#коллекции-базы-данных)
 - [Связи между коллекциями](#связи-между-коллекциями)
@@ -12,6 +13,206 @@
 - [Миграции и версионирование](#миграции-и-версионирование)
 - [Резервное копирование](#резервное-копирование)
 - [Мониторинг и оптимизация](#мониторинг-и-оптимизация)
+
+---
+
+## 🔌 Подключение к базе данных
+
+### Строки подключения
+
+#### Development (локальная разработка)
+```bash
+# Через Docker Compose
+mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin
+
+# Прямое подключение к MongoDB
+mongodb://localhost:27017/ai-stock-bot
+```
+
+#### Production (продакшн)
+```bash
+# С аутентификацией
+mongodb://username:password@mongodb-host:27017/ai-stock-bot?authSource=admin
+
+# С SSL/TLS
+mongodb://username:password@mongodb-host:27017/ai-stock-bot?authSource=admin&ssl=true
+
+# Replica Set
+mongodb://user:pass@host1:27017,host2:27017,host3:27017/ai-stock-bot?replicaSet=rs0&authSource=admin
+```
+
+### Подключение через различные клиенты
+
+#### 1. MongoDB Compass (GUI)
+```
+Connection String: mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin
+
+Или заполните поля:
+- Hostname: localhost
+- Port: 27017
+- Authentication: Username/Password
+- Username: admin
+- Password: password
+- Authentication Database: admin
+- Default Database: ai-stock-bot
+```
+
+#### 2. mongosh (CLI)
+```bash
+# Подключение к локальной БД
+mongosh "mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin"
+
+# Или пошагово
+mongosh
+use admin
+db.auth("admin", "password")
+use ai-stock-bot
+```
+
+#### 3. Через Docker
+```bash
+# Подключение к контейнеру MongoDB
+docker exec -it ai-stock-bot-mongodb-1 mongosh
+
+# Внутри контейнера
+use admin
+db.auth("admin", "password")
+use ai-stock-bot
+```
+
+#### 4. Node.js приложение
+```javascript
+const mongoose = require('mongoose')
+
+// Development
+const mongoUri = 'mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin'
+
+// Production с переменными окружения
+const mongoUri = `mongodb://${process.env.MONGO_USER}:${process.env.MONGO_PASSWORD}@${process.env.MONGO_HOST}:${process.env.MONGO_PORT}/${process.env.MONGO_DB}?authSource=admin`
+
+mongoose.connect(mongoUri, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+```
+
+### Переменные окружения
+
+#### .env файл для разработки
+```bash
+# MongoDB Configuration
+MONGODB_URI=mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin
+MONGO_HOST=localhost
+MONGO_PORT=27017
+MONGO_DB=ai-stock-bot
+MONGO_USER=admin
+MONGO_PASSWORD=password
+MONGO_AUTH_SOURCE=admin
+```
+
+#### Docker Compose переменные
+```yaml
+environment:
+  - MONGODB_URI=mongodb://admin:${MONGO_INITDB_ROOT_PASSWORD}@mongodb:27017/ai-stock-bot?authSource=admin
+  - MONGO_INITDB_ROOT_USERNAME=admin
+  - MONGO_INITDB_ROOT_PASSWORD=your_secure_password
+```
+
+### Проверка подключения
+
+#### Тест подключения
+```bash
+# Простая проверка
+mongosh "mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin" --eval "db.runCommand('ping')"
+
+# Проверка статуса
+mongosh "mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin" --eval "db.serverStatus().ok"
+```
+
+#### Health check в приложении
+```javascript
+const healthCheck = async () => {
+  try {
+    await mongoose.connection.db.admin().ping()
+    console.log('✅ Database connection successful')
+    return true
+  } catch (error) {
+    console.error('❌ Database connection failed:', error.message)
+    return false
+  }
+}
+```
+
+### Troubleshooting подключений
+
+#### Частые проблемы
+
+1. **Ошибка аутентификации**
+```bash
+# Проверьте учетные данные
+mongosh --eval "db.runCommand({connectionStatus: 1})"
+
+# Создание пользователя если нужно
+use admin
+db.createUser({
+  user: "admin",
+  pwd: "password",
+  roles: ["root"]
+})
+```
+
+2. **Сетевые проблемы**
+```bash
+# Проверка доступности порта
+telnet localhost 27017
+nc -zv localhost 27017
+
+# Проверка Docker сети
+docker network ls
+docker network inspect ai-stock-bot_default
+```
+
+3. **Проблемы с SSL/TLS**
+```bash
+# Подключение без SSL для тестирования
+mongodb://user:pass@host:27017/db?authSource=admin&ssl=false
+
+# Проверка сертификатов
+openssl s_client -connect mongodb-host:27017 -servername mongodb-host
+```
+
+4. **Проблемы с Replica Set**
+```bash
+# Проверка статуса replica set
+rs.status()
+rs.conf()
+
+# Подключение к primary
+mongodb://user:pass@host1:27017/db?replicaSet=rs0&readPreference=primary
+```
+
+### Мониторинг подключений
+
+#### Активные подключения
+```javascript
+// Количество активных подключений
+db.serverStatus().connections
+
+// Детальная информация о подключениях
+db.runCommand("currentOp")
+
+// Статистика по операциям
+db.runCommand("serverStatus").opcounters
+```
+
+#### Логирование подключений
+```bash
+# Включение логирования подключений
+db.setLogLevel(2, "network")
+
+# Просмотр логов
+docker logs ai-stock-bot-mongodb-1 --tail 100 -f
+```
 
 ---
 
@@ -702,7 +903,300 @@ const userSchema = new mongoose.Schema({
 
 ## 💾 Резервное копирование
 
-### Стратегия бэкапов
+### Ручное создание бэкапов
+
+#### 1. Полный бэкап базы данных
+```bash
+# Создание полного бэкапа
+DATE=$(date +%Y%m%d_%H%M%S)
+BACKUP_DIR="./backups/manual/$DATE"
+
+# Локальная MongoDB
+mongodump \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --out $BACKUP_DIR \
+  --gzip
+
+# Через Docker
+docker exec ai-stock-bot-mongodb-1 mongodump \
+  --db ai-stock-bot \
+  --out /tmp/backup \
+  --gzip
+
+# Копирование из контейнера
+docker cp ai-stock-bot-mongodb-1:/tmp/backup ./backups/manual/$DATE
+```
+
+#### 2. Бэкап отдельных коллекций
+```bash
+# Бэкап только пользователей
+mongodump \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --collection users \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --out ./backups/users_$(date +%Y%m%d) \
+  --gzip
+
+# Бэкап критических коллекций
+for collection in users payments images appconfigs; do
+  mongodump \
+    --host localhost:27017 \
+    --db ai-stock-bot \
+    --collection $collection \
+    --username admin \
+    --password password \
+    --authenticationDatabase admin \
+    --out ./backups/critical_$(date +%Y%m%d) \
+    --gzip
+done
+```
+
+#### 3. Экспорт в JSON/CSV
+```bash
+# Экспорт коллекции в JSON
+mongoexport \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --collection users \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --out users_export_$(date +%Y%m%d).json \
+  --pretty
+
+# Экспорт в CSV
+mongoexport \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --collection payments \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --type csv \
+  --fields _id,userId,amount,status,createdAt \
+  --out payments_export_$(date +%Y%m%d).csv
+```
+
+### Ручное восстановление
+
+#### 1. Полное восстановление базы данных
+```bash
+# Восстановление из полного бэкапа
+mongorestore \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --drop \
+  --gzip \
+  ./backups/manual/20240128_120000/ai-stock-bot
+
+# Восстановление через Docker
+docker cp ./backups/manual/20240128_120000 ai-stock-bot-mongodb-1:/tmp/restore
+docker exec ai-stock-bot-mongodb-1 mongorestore \
+  --db ai-stock-bot \
+  --drop \
+  --gzip \
+  /tmp/restore/ai-stock-bot
+```
+
+#### 2. Восстановление отдельных коллекций
+```bash
+# Восстановление только коллекции users
+mongorestore \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --collection users \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --drop \
+  --gzip \
+  ./backups/users_20240128/ai-stock-bot/users.bson.gz
+
+# Восстановление с переименованием коллекции
+mongorestore \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --collection users_backup \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --gzip \
+  ./backups/users_20240128/ai-stock-bot/users.bson.gz
+```
+
+#### 3. Импорт из JSON/CSV
+```bash
+# Импорт из JSON
+mongoimport \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --collection users \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --file users_export_20240128.json \
+  --drop
+
+# Импорт из CSV
+mongoimport \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --collection payments \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --type csv \
+  --headerline \
+  --file payments_export_20240128.csv \
+  --drop
+```
+
+### Проверка целостности бэкапов
+
+#### 1. Валидация бэкапа
+```bash
+# Проверка структуры бэкапа
+ls -la ./backups/manual/20240128_120000/ai-stock-bot/
+file ./backups/manual/20240128_120000/ai-stock-bot/*.bson.gz
+
+# Проверка размера файлов
+du -sh ./backups/manual/20240128_120000/
+
+# Проверка сжатых файлов
+gunzip -t ./backups/manual/20240128_120000/ai-stock-bot/*.bson.gz
+```
+
+#### 2. Тестовое восстановление
+```bash
+# Создание тестовой базы данных
+mongorestore \
+  --host localhost:27017 \
+  --db ai-stock-bot-test \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --gzip \
+  ./backups/manual/20240128_120000/ai-stock-bot
+
+# Проверка количества документов
+mongosh "mongodb://admin:password@localhost:27017/ai-stock-bot-test?authSource=admin" \
+  --eval "
+    print('Users:', db.users.countDocuments());
+    print('Images:', db.images.countDocuments());
+    print('Payments:', db.payments.countDocuments());
+  "
+
+# Удаление тестовой базы
+mongosh "mongodb://admin:password@localhost:27017/ai-stock-bot-test?authSource=admin" \
+  --eval "db.dropDatabase()"
+```
+
+### Сценарии восстановления
+
+#### 1. Восстановление после сбоя
+```bash
+#!/bin/bash
+# disaster-recovery.sh
+
+echo "🚨 Начало аварийного восстановления..."
+
+# Остановка приложений
+docker-compose down backend tg-bot
+
+# Поиск последнего валидного бэкапа
+LATEST_BACKUP=$(ls -t ./backups/daily/ | head -1)
+echo "📁 Используется бэкап: $LATEST_BACKUP"
+
+# Восстановление базы данных
+mongorestore \
+  --host localhost:27017 \
+  --db ai-stock-bot \
+  --username admin \
+  --password password \
+  --authenticationDatabase admin \
+  --drop \
+  --gzip \
+  ./backups/daily/$LATEST_BACKUP/ai-stock-bot
+
+# Проверка восстановления
+USERS_COUNT=$(mongosh "mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin" \
+  --quiet --eval "db.users.countDocuments()")
+
+if [ "$USERS_COUNT" -gt 0 ]; then
+  echo "✅ Восстановление успешно. Пользователей: $USERS_COUNT"
+  
+  # Запуск приложений
+  docker-compose up -d backend tg-bot
+  echo "🚀 Приложения запущены"
+else
+  echo "❌ Ошибка восстановления"
+  exit 1
+fi
+```
+
+#### 2. Миграция между окружениями
+```bash
+#!/bin/bash
+# migrate-env.sh
+
+SOURCE_HOST="prod-mongodb:27017"
+TARGET_HOST="staging-mongodb:27017"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+echo "📦 Создание бэкапа с продакшена..."
+mongodump \
+  --host $SOURCE_HOST \
+  --db ai-stock-bot \
+  --username admin \
+  --password $PROD_PASSWORD \
+  --authenticationDatabase admin \
+  --out ./migration/$DATE \
+  --gzip
+
+echo "🔄 Восстановление на staging..."
+mongorestore \
+  --host $TARGET_HOST \
+  --db ai-stock-bot \
+  --username admin \
+  --password $STAGING_PASSWORD \
+  --authenticationDatabase admin \
+  --drop \
+  --gzip \
+  ./migration/$DATE/ai-stock-bot
+
+echo "🧹 Очистка чувствительных данных на staging..."
+mongosh "mongodb://admin:$STAGING_PASSWORD@$TARGET_HOST/ai-stock-bot?authSource=admin" \
+  --eval "
+    // Очистка реальных платежных данных
+    db.payments.updateMany({}, {\$set: {yoomoneyData: null}});
+    
+    // Маскировка email адресов
+    db.users.updateMany(
+      {'profile.email': {\$exists: true}},
+      {\$set: {'profile.email': 'test@example.com'}}
+    );
+    
+    // Очистка токенов и паролей
+    db.users.updateMany({}, {\$unset: {
+      'stockServices.rf123.credentials.passwordHash': '',
+      'metadata.ipAddress': ''
+    }});
+  "
+
+echo "✅ Миграция завершена"
+```
+
+### Автоматизированные бэкапы
 
 #### 1. Ежедневные полные бэкапы
 ```bash
@@ -720,6 +1214,9 @@ mongodump \
 # Сжатие и загрузка в облако
 tar -czf "$BACKUP_DIR.tar.gz" -C /backups/daily $DATE
 aws s3 cp "$BACKUP_DIR.tar.gz" s3://ai-stock-bot-backups/daily/
+
+# Очистка старых бэкапов (старше 30 дней)
+find /backups/daily -name "*.tar.gz" -mtime +30 -delete
 ```
 
 #### 2. Инкрементальные бэкапы
