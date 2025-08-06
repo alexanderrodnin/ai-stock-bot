@@ -324,6 +324,12 @@ MONGO_INITDB_ROOT_USERNAME=admin      # Имя администратора Mong
 MONGO_INITDB_ROOT_PASSWORD=your_secure_mongodb_password_here  # Пароль администратора MongoDB (нужно придумать свой пароль)
 MONGO_INITDB_DATABASE=ai_stock_bot    # Название базы данных
 
+# MongoDB Express Configuration (для веб-интерфейса управления БД)
+ME_CONFIG_MONGODB_ADMINUSERNAME=admin                        # Имя пользователя для MongoDB Express (должно совпадать с MONGO_INITDB_ROOT_USERNAME)
+ME_CONFIG_MONGODB_ADMINPASSWORD=your_secure_mongodb_password_here  # Пароль для MongoDB Express (должен совпадать с MONGO_INITDB_ROOT_PASSWORD)
+ME_CONFIG_BASICAUTH_USERNAME=admin                           # Имя пользователя для веб-интерфейса MongoDB Express
+ME_CONFIG_BASICAUTH_PASSWORD=your_secure_web_ui_password_here # Пароль для веб-интерфейса MongoDB Express (можно отличаться от пароля БД)
+
 # AI Providers Configuration
 OPENAI_API_KEY=your_openai_api_key_here    # API ключ OpenAI для DALL-E 3 (нужно подставить ключ, который выдал OpenAI)
 SEGMIND_API_KEY=your_segmind_api_key_here  # API ключ Segmind для других AI моделей (нужно подставить ключ, который выдал Segmind)
@@ -378,11 +384,16 @@ IMAGE_GENERATION_MAX=100              # Максимум генераций в �
 UPLOAD_WINDOW=3600000                 # Окно для лимитов загрузки (1 час)
 UPLOAD_MAX=100                        # Максимум загрузок в час
 
+# Feature Flags (Флаги функций)
+STOCKS_ENABLED=true                   # Включить/выключить функциональность стоковых сервисов
+
 # Watchtower Notifications (Опционально - уведомления об обновлениях)
 # WATCHTOWER_NOTIFICATION_URL=discord://token@id     # Discord webhook
 # WATCHTOWER_NOTIFICATION_URL=slack://token@channel  # Slack webhook
 # WATCHTOWER_NOTIFICATION_URL=telegram://token@chatid # Telegram уведомления
 ```
+
+**Важно:** Если вам потребуется изменить переменные окружения после запуска контейнеров, необходимо будет пересобрать и перезапустить соответствующие сервисы. Простое редактирование файла `.env.prod` не применит изменения к уже запущенным контейнерам. Подробные команды для управления контейнерами приведены в следующем разделе.
 
 ### 3. Запуск системы
 
