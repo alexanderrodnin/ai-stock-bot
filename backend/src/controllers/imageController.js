@@ -13,6 +13,7 @@ const User = require('../models/User');
 const Image = require('../models/Image');
 const logger = require('../utils/logger');
 const { AppError } = require('../middleware/errorHandler');
+const config = require('../config/config');
 
 class ImageController {
   
@@ -54,12 +55,14 @@ class ImageController {
       model,
       size,
       quality,
-      style
+      style,
+      stocksEnabled: config.features.stocksEnabled
     });
 
     try {
       // Check if user has active stock services before generating image
-      if (userId) {
+      // Only enforce this requirement when stocks functionality is enabled
+      if (config.features.stocksEnabled && userId) {
         const user = await User.findById(userId);
         if (user) {
           const hasActiveStocks = user.stockServices && 
@@ -68,7 +71,8 @@ class ImageController {
           if (!hasActiveStocks) {
             logger.warn('Image generation blocked - no active stock services', {
               userId,
-              userExternalId
+              userExternalId,
+              stocksEnabled: config.features.stocksEnabled
             });
             
             return res.status(400).json({
@@ -80,6 +84,15 @@ class ImageController {
             });
           }
         }
+      }
+
+      // Log when stocks are disabled and check is bypassed
+      if (!config.features.stocksEnabled && userId) {
+        logger.info('Stock services check bypassed - stocks functionality disabled', {
+          userId,
+          userExternalId,
+          stocksEnabled: config.features.stocksEnabled
+        });
       }
 
       // Generate image using ImageService
