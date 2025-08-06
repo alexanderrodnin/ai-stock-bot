@@ -71,6 +71,21 @@ async function initializeUser(telegramUser) {
  * Show stock setup menu
  */
 async function showStockSetupMenu(chatId, userId) {
+  // Check if stocks feature is enabled
+  const stocksEnabled = await backendApi.isStocksEnabled();
+  
+  if (!stocksEnabled) {
+    const message = `⚠️ *Функция стоков временно отключена*
+
+Генерация изображений в данный момент недоступна.
+Обратитесь к администратору для получения дополнительной информации.`;
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown'
+    });
+    return;
+  }
+
   const keyboard = {
     inline_keyboard: [
       [{ text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }],

@@ -9,6 +9,7 @@ const uploadRoutes = require('./upload');
 const userRoutes = require('./users');
 const adminRoutes = require('./admin');
 const paymentRoutes = require('./payments');
+const configRoutes = require('./config');
 
 const router = express.Router();
 
@@ -30,6 +31,7 @@ router.use('/upload', uploadRoutes);
 router.use('/users', userRoutes);
 router.use('/admin', adminRoutes);
 router.use('/payments', paymentRoutes);
+router.use('/config', configRoutes);
 
 // API info endpoint
 router.get('/', (req, res) => {
