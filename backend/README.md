@@ -339,6 +339,13 @@ GET    /api/payments/history/:userId          # История платежей
 GET    /api/payments/recent-completed         # Недавние платежи (для бота)
 ```
 
+### Config API (`/api/config/*`)
+**Конфигурация и флаги функций**
+
+```http
+GET    /api/config/features                   # Получение флагов функций (STOCKS_ENABLED и др.)
+```
+
 ### Admin API (`/api/admin/*`)
 **Административное управление**
 
@@ -424,6 +431,9 @@ CORS_CREDENTIALS=true
 # Логирование
 LOG_LEVEL=info
 LOG_FORMAT=combined
+
+# Feature Flags (Флаги функций)
+STOCKS_ENABLED=true                 # Включить/выключить функциональность стоковых сервисов
 ```
 
 ### Конфигурационные файлы
@@ -456,6 +466,222 @@ module.exports = {
     defaultModel: 'juggernaut-pro-flux'
   }
 };
+```
+
+### Feature Flags (Флаги функций)
+
+#### STOCKS_ENABLED
+
+**Системный флаг отключения стоковых сервисов** - переменная окружения для управления доступностью функций загрузки на стоковые площадки на уровне backend API.
+
+##### Конфигурация
+
+```bash
+# Включение стоковых функций (по умолчанию)
+STOCKS_ENABLED=true
+
+# Отключение стоковых функций
+STOCKS_ENABLED=false
+```
+
+##### Техническая архитектура
+
+###### Конфигурация в config.js
+```javascript
+// backend/src/config/config.js
+module.exports = {
+  features: {
+    stocksEnabled: process.env.STOCKS_ENABLED === 'true'
+  }
+};
+```
+
+###### Middleware для проверки флага
+```javascript
+// backend/src/middleware/stocksCheck.js
+const config = require('../config/config');
+
+const checkStocksEnabled = (req, res, next) => {
+  if (!config.features.stocksEnabled) {
+    return res.status(503).json({
+      success: false,
+      error: 'Stock services are temporarily disabled',
+      code: 'STOCKS_DISABLED'
+    });
+  }
+  next();
+};
+
+module.exports = { checkStocksEnabled };
+```
+
+###### Применение в роутах
+```javascript
+// backend/src/routes/upload.js
+const { checkStocksEnabled } = require('../middleware/stocksCheck');
+
+// Применение middleware ко всем upload routes
+router.use(checkStocksEnabled);
+
+// backend/src/routes/users.js
+// Применение к stock-related endpoints
+router.use('/:userId/stock-services', checkStocksEnabled);
+```
+
+##### API Endpoints поведение
+
+###### Config API
+```javascript
+// GET /api/config/features
+{
+  "success": true,
+  "data": {
+    "stocksEnabled": false
+  }
+}
+```
+
+###### Upload API (при STOCKS_ENABLED=false)
+```javascript
+// POST /api/upload/123rf
+// PUT /api/upload/:service
+// GET /api/upload/status/:imageId
+// Response:
+{
+  "success": false,
+  "error": "Stock services are temporarily disabled",
+  "code": "STOCKS_DISABLED"
+}
+```
+
+###### Users API (stock-related endpoints)
+```javascript
+// GET /api/users/:userId/stock-services
+// PUT /api/users/:userId/stock-services/:service
+// Response:
+{
+  "success": false,
+  "error": "Stock services are temporarily disabled",
+  "code": "STOCKS_DISABLED"
+}
+```
+
+##### Сервисы и компоненты
+
+###### StockUploadService
+```javascript
+// backend/src/services/stockUploadService.js
+class StockUploadService {
+  async uploadTo123RF(imageData, metadata) {
+    if (!config.features.stocksEnabled) {
+      throw new Error('Stock services are disabled');
+    }
+    // ... upload logic
+  }
+}
+```
+
+###### FTP Service
+```javascript
+// backend/src/services/ftpService.js
+class FTPService {
+  async testConnection(credentials) {
+    if (!config.features.stocksEnabled) {
+      throw new Error('Stock services are disabled');
+    }
+    // ... connection logic
+  }
+}
+```
+
+##### Логирование и мониторинг
+
+###### Инициализация системы
+```javascript
+// backend/src/server.js
+logger.info('Backend server starting', {
+  port: config.port,
+  environment: config.nodeEnv,
+  features: {
+    stocksEnabled: config.features.stocksEnabled
+  }
+});
+```
+
+###### Мониторинг попыток использования
+```javascript
+// backend/src/middleware/stocksCheck.js
+const checkStocksEnabled = (req, res, next) => {
+  if (!config.features.stocksEnabled) {
+    logger.warn('Blocked request to disabled stock service', {
+      endpoint: req.originalUrl,
+      method: req.method,
+      ip: req.ip,
+      userAgent: req.get('User-Agent'),
+      timestamp: new Date().toISOString()
+    });
+    
+    return res.status(503).json({
+      success: false,
+      error: 'Stock services are temporarily disabled',
+      code: 'STOCKS_DISABLED'
+    });
+  }
+  next();
+};
+```
+
+##### Операционные сценарии
+
+###### Graceful отключение для обслуживания
+```bash
+# 1. Установка флага
+STOCKS_ENABLED=false
+
+# 2. Перезапуск backend (без downtime для других функций)
+docker-compose restart backend
+
+# 3. Проверка статуса
+curl http://localhost:3000/api/config/features
+
+# 4. После обслуживания - включение
+STOCKS_ENABLED=true
+docker-compose restart backend
+```
+
+###### Hot-reload конфигурации (планируется)
+```javascript
+// Будущая функциональность через Admin API
+POST /api/admin/config/features
+{
+  "stocksEnabled": false
+}
+```
+
+##### Интеграция с внешними системами
+
+###### Telegram Bot API интеграция
+```javascript
+// Endpoint для проверки клиентами
+GET /api/config/features
+
+// Используется tg-bot для адаптации UI
+const response = await backendApi.get('/config/features');
+const { stocksEnabled } = response.data.data;
+```
+
+###### Health Check интеграция
+```javascript
+// GET /api/admin/status включает информацию о флагах
+{
+  "status": "healthy",
+  "features": {
+    "stocksEnabled": true
+  },
+  "services": {
+    "stockUpload": stocksEnabled ? "available" : "disabled"
+  }
+}
 ```
 
 ### Полный список переменных в `.env.example`
