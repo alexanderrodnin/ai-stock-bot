@@ -58,6 +58,19 @@ async function initializeUser(telegramUser) {
     };
 
     const result = await backendApi.createOrGetUser(userData);
+    
+    // Debug logging to identify the issue
+    console.log('Full API response structure:', JSON.stringify(result, null, 2));
+    console.log('User object keys:', Object.keys(result.user || {}));
+    console.log('User object id field:', result.user?.id);
+    console.log('User object _id field:', result.user?._id);
+    
+    // Ensure user has an id field
+    if (!result.user.id && result.user._id) {
+      result.user.id = result.user._id;
+      console.log('Fixed user ID using _id field:', result.user.id);
+    }
+    
     console.log(`User initialized: ${result.user.id} (${result.user.externalId})`);
     return result;
   } catch (error) {
