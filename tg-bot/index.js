@@ -162,7 +162,15 @@ async function showSetupHelp(chatId) {
 /**
  * Show upload-only actions menu (for file message)
  */
-function getUploadOnlyKeyboard(imageId, availableServices = []) {
+async function getUploadOnlyKeyboard(imageId, availableServices = []) {
+  // Check if stocks feature is enabled
+  const stocksEnabled = await backendApi.isStocksEnabled();
+  
+  if (!stocksEnabled) {
+    // Return empty keyboard if stocks are disabled
+    return { inline_keyboard: [] };
+  }
+  
   const keyboard = [];
   
   // Add upload buttons for each available service
@@ -252,11 +260,16 @@ bot.onText(/\/start/, async (msg) => {
     // Initialize user
     const { user, isNewUser, trialImagesGranted } = await initializeUser(msg.from);
     
+    // Check if stocks feature is enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    
     // Check if user has any images (including trial images)
     const subscription = await backendApi.getUserSubscription(user.id);
     
     // 1. Send welcome message with buttons (if user has images)
-    const welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
+    let welcomeMessage;
+    if (stocksEnabled) {
+      welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
 
 Я помогу вам генерировать изображения с помощью AI и загружать их на площадку стоковых изображений 123RF.
 
@@ -266,6 +279,17 @@ bot.onText(/\/start/, async (msg) => {
 *📤 Возможности:*
 • Генерация изображений по текстовому описанию
 • Загрузка сервис стоковых фотографий 123RF`;
+    } else {
+      welcomeMessage = `🎨 *Добро пожаловать в AI Image Bot!*
+
+Я помогу вам генерировать изображения с помощью AI.
+
+*🤖 AI модель:*
+• Juggernaut Pro Flux
+
+*📤 Возможности:*
+• Генерация изображений по текстовому описанию`;
+    }
 
     if (subscription.isActive && subscription.imagesRemaining > 0) {
       // User has images - show welcome message with balance and buttons
@@ -276,11 +300,15 @@ bot.onText(/\/start/, async (msg) => {
             { text: "💰 Баланс", callback_data: "menu_balance" }
           ],
           [
-            { text: "💳 Купить изображения", callback_data: "menu_buy" },
-            { text: "⚙️ Мои стоки", callback_data: "menu_mystocks" }
+            { text: "💳 Купить изображения", callback_data: "menu_buy" }
           ]
         ]
       };
+
+      // Add stocks button only if stocks are enabled
+      if (stocksEnabled) {
+        menuKeyboard.inline_keyboard[1].push({ text: "⚙️ Мои стоки", callback_data: "menu_mystocks" });
+      }
 
       await bot.sendMessage(chatId, welcomeMessage, { 
         parse_mode: 'Markdown',
@@ -306,14 +334,16 @@ bot.onText(/\/start/, async (msg) => {
       );
     }
 
-    // 4. Show stock setup warning if stocks are not configured
-    const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
-    if (!hasActiveStocks) {
-      await bot.sendMessage(chatId, 
-        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать стоковый сервис 123RF.',
-        { parse_mode: 'Markdown' }
-      );
-      return showStockSetupMenu(chatId, user.id);
+    // 4. Show stock setup warning if stocks are enabled and not configured
+    if (stocksEnabled) {
+      const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
+      if (!hasActiveStocks) {
+        await bot.sendMessage(chatId, 
+          '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать стоковый сервис 123RF.',
+          { parse_mode: 'Markdown' }
+        );
+        return showStockSetupMenu(chatId, user.id);
+      }
     }
 
     // 5. Everything is ready - show success message
@@ -343,32 +373,53 @@ bot.onText(/\/help/, async (msg) => {
       );
     }
     
-    const helpMessage = `📖 *Справка по использованию*
+    // Check if stocks feature is enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    
+    let helpMessage = `📖 *Справка по использованию*
 
 *🤖 AI Модель:*
 • **Juggernaut Pro Flux** - профессиональные реалистичные изображения высокого качества
 
 *Генерация изображений:*
 1. Отправьте текстовое описание изображения
-2. Дождитесь генерации (может занять до 30 секунд)
+2. Дождитесь генерации (может занять до 30 секунд)`;
+
+    if (stocksEnabled) {
+      helpMessage += `
 3. Загрузите изображение на 123RF
 
 *Настройка стоков:*
 • Используйте /mystocks для управления сервисом 123RF
-• Нужны **nickname** (не email!) и пароль от аккаунта 123RF
+• Нужны **nickname** (не email!) и пароль от аккаунта 123RF`;
+    }
+
+    helpMessage += `
 
 *Подписка и оплата:*
 • Используйте /balance для проверки баланса изображений
 • Используйте /buy для покупки изображений
 
 *Ограничения:*
-• Промт должен быть текстовым и до 1000 символов
+• Промт должен быть текстовым и до 1000 символов`;
+
+    if (stocksEnabled) {
+      helpMessage += `
 • Изображения обрабатываются в формате 4096x4096 для загрузки
-• Соблюдайте правила контента стоковой площадки 123RF
+• Соблюдайте правила контента стоковой площадки 123RF`;
+    }
+
+    helpMessage += `
 
 *Команды:*
-/start - начать работу
-/mystocks - управление стоковым сервисом
+/start - начать работу`;
+
+    if (stocksEnabled) {
+      helpMessage += `
+/mystocks - управление стоковым сервисом`;
+    }
+
+    helpMessage += `
 /balance - проверить баланс изображений
 /buy - купить изображения`;
 
@@ -440,6 +491,14 @@ bot.onText(/\/mystocks/, async (msg) => {
   
   try {
     const { user } = await initializeUser(msg.from);
+    
+    // Check if stocks feature is enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    
+    if (!stocksEnabled) {
+      // Silently ignore the command when stocks are disabled
+      return;
+    }
     
     // Check subscription first
     const subscription = await backendApi.getUserSubscription(user.id);
@@ -549,14 +608,17 @@ bot.on('message', async (msg) => {
       );
     }
 
-    // Only check stocks if subscription is active
-    const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
-    if (!hasActiveStocks) {
-      await bot.sendMessage(chatId, 
-        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
-        { parse_mode: 'Markdown' }
-      );
-      return showStockSetupMenu(chatId, user.id);
+    // Only check stocks if subscription is active AND stocks are enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    if (stocksEnabled) {
+      const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
+      if (!hasActiveStocks) {
+        await bot.sendMessage(chatId, 
+          '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
+          { parse_mode: 'Markdown' }
+        );
+        return showStockSetupMenu(chatId, user.id);
+      }
     }
 
     // Only start processing if user has active subscription AND stocks
@@ -634,7 +696,7 @@ bot.on('message', async (msg) => {
         const fileCaption = `📁 Файл изображения\n\n📝 Промт: ${prompt}\n📐 Размер: 4096x4096`;
         
         // Create keyboard with only upload button
-        const uploadKeyboard = getUploadOnlyKeyboard(imageData.id, availableServices);
+        const uploadKeyboard = await getUploadOnlyKeyboard(imageData.id, availableServices);
         
         // Send image as document (file) without compression
         await bot.sendDocument(chatId, imageStreamForFile, {
@@ -1858,32 +1920,53 @@ async function handleHelpCommand(chatId, user) {
       );
     }
     
-    const helpMessage = `📖 *Справка по использованию*
+    // Check if stocks feature is enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    
+    let helpMessage = `📖 *Справка по использованию*
 
 *🤖 AI Модель:*
 • **Juggernaut Pro Flux** - профессиональные реалистичные изображения высокого качества
 
 *Генерация изображений:*
 1. Отправьте текстовое описание изображения
-2. Дождитесь генерации (может занять до 30 секунд)
+2. Дождитесь генерации (может занять до 30 секунд)`;
+
+    if (stocksEnabled) {
+      helpMessage += `
 3. Загрузите изображение на 123RF
 
 *Настройка стоков:*
 • Используйте /mystocks для управления сервисом 123RF
-• Нужны **nickname** (не email!) и пароль от аккаунта 123RF
+• Нужны **nickname** (не email!) и пароль от аккаунта 123RF`;
+    }
+
+    helpMessage += `
 
 *Подписка и оплата:*
 • Используйте /balance для проверки баланса изображений
 • Используйте /buy для покупки изображений
 
 *Ограничения:*
-• Промт должен быть текстовым и до 1000 символов
+• Промт должен быть текстовым и до 1000 символов`;
+
+    if (stocksEnabled) {
+      helpMessage += `
 • Изображения обрабатываются в формате 4096x4096 для загрузки
-• Соблюдайте правила контента стоковой площадки 123RF
+• Соблюдайте правила контента стоковой площадки 123RF`;
+    }
+
+    helpMessage += `
 
 *Команды:*
-/start - начать работу
-/mystocks - управление стоковым сервисом
+/start - начать работу`;
+
+    if (stocksEnabled) {
+      helpMessage += `
+/mystocks - управление стоковым сервисом`;
+    }
+
+    helpMessage += `
 /balance - проверить баланс изображений
 /buy - купить изображения`;
 
