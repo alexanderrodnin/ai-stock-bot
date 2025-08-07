@@ -119,6 +119,20 @@ class BackendApiService {
   }
 
   /**
+   * Get current active AI model information
+   * @returns {Promise<Object>} Current AI model info
+   */
+  async getCurrentAIModel() {
+    try {
+      const response = await this.client.get('/config/ai-model/current');
+      return response.data.data;
+    } catch (error) {
+      console.error('Error getting current AI model:', error.message);
+      throw new Error(`Failed to get current AI model: ${error.message}`);
+    }
+  }
+
+  /**
    * Check if user has active stock services
    * @param {string} userId User ID
    * @returns {Promise<boolean>} True if user has at least one active stock service

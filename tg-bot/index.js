@@ -37,6 +37,38 @@ const userSessions = new Map();
 // Image cache for callback operations
 const userImageCache = new Map();
 
+// AI Model cache for performance optimization
+let aiModelCache = {
+  displayName: 'AI модель',
+  lastUpdated: 0,
+  cacheTimeout: 5 * 60 * 1000 // 5 minutes
+};
+
+// Model display names mapping
+const modelDisplayNames = {
+  'juggernaut-pro-flux': 'Juggernaut Pro Flux',
+  'dall-e-3': 'DALL-E 3',
+  'seedream-v3': 'Seedream V3',
+  'hidream-i1-fast': 'HiDream-I1 Fast'
+};
+
+/**
+ * Get active AI model display name with caching
+ */
+async function getActiveModelDisplayName() {
+  try {
+    // Fetch current model from backend
+    const modelInfo = await backendApi.getCurrentAIModel();
+    const displayName = modelDisplayNames[modelInfo.activeModel] || modelInfo.activeModel || 'AI модель';
+    
+    return displayName;
+  } catch (error) {
+    console.error('Error getting active model display name:', error.message);
+    // Return cached value if available, otherwise fallback
+    return aiModelCache.displayName || 'AI модель';
+  }
+}
+
 /**
  * Initialize or get user from backend
  */
@@ -58,12 +90,6 @@ async function initializeUser(telegramUser) {
     };
 
     const result = await backendApi.createOrGetUser(userData);
-    
-    // Debug logging to identify the issue
-    console.log('Full API response structure:', JSON.stringify(result, null, 2));
-    console.log('User object keys:', Object.keys(result.user || {}));
-    console.log('User object id field:', result.user?.id);
-    console.log('User object _id field:', result.user?._id);
     
     // Ensure user has an id field
     if (!result.user.id && result.user._id) {
@@ -279,6 +305,9 @@ bot.onText(/\/start/, async (msg) => {
     // Check if user has any images (including trial images)
     const subscription = await backendApi.getUserSubscription(user.id);
     
+    // Get current AI model name
+    const currentModelName = await getActiveModelDisplayName();
+    
     // 1. Send welcome message with buttons (if user has images)
     let welcomeMessage;
     if (stocksEnabled) {
@@ -287,7 +316,7 @@ bot.onText(/\/start/, async (msg) => {
 Я помогу вам генерировать изображения с помощью AI и загружать их на площадку стоковых изображений 123RF.
 
 *🤖 AI модель:*
-• Juggernaut Pro Flux
+• ${currentModelName}
 
 *📤 Возможности:*
 • Генерация изображений по текстовому описанию
@@ -298,7 +327,7 @@ bot.onText(/\/start/, async (msg) => {
 Я помогу вам генерировать изображения с помощью AI.
 
 *🤖 AI модель:*
-• Juggernaut Pro Flux
+• ${currentModelName}
 
 *📤 Возможности:*
 • Генерация изображений по текстовому описанию`;
@@ -389,10 +418,13 @@ bot.onText(/\/help/, async (msg) => {
     // Check if stocks feature is enabled
     const stocksEnabled = await backendApi.isStocksEnabled();
     
+    // Get current AI model name
+    const currentModelName = await getActiveModelDisplayName();
+    
     let helpMessage = `📖 *Справка по использованию*
 
 *🤖 AI Модель:*
-• **Juggernaut Pro Flux** - профессиональные реалистичные изображения высокого качества
+• **${currentModelName}** - профессиональные реалистичные изображения высокого качества
 
 *Генерация изображений:*
 1. Отправьте текстовое описание изображения
@@ -1936,10 +1968,13 @@ async function handleHelpCommand(chatId, user) {
     // Check if stocks feature is enabled
     const stocksEnabled = await backendApi.isStocksEnabled();
     
+    // Get current AI model name
+    const currentModelName = await getActiveModelDisplayName();
+    
     let helpMessage = `📖 *Справка по использованию*
 
 *🤖 AI Модель:*
-• **Juggernaut Pro Flux** - профессиональные реалистичные изображения высокого качества
+• **${currentModelName}** - профессиональные реалистичные изображения высокого качества
 
 *Генерация изображений:*
 1. Отправьте текстовое описание изображения
