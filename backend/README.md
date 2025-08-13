@@ -134,6 +134,7 @@ backend/
 │   │   ├── paymentService.js       # Интеграция с YooMoney API
 │   │   ├── ftpService.js           # FTP загрузка файлов
 │   │   ├── stockUploadService.js   # Загрузка на стоковые сервисы
+│   │   ├── upscaleService.js       # AI upscaling через Replicate Real-ESRGAN
 │   │   └── aiProviders/            # AI провайдеры (Factory pattern)
 │   │       ├── juggernautProFluxService.js  # Segmind Juggernaut Pro Flux
 │   │       ├── hiDreamI1Service.js          # Segmind HiDream-I1 Fast
@@ -400,9 +401,17 @@ HOST=0.0.0.0
 OPENAI_BASE_URL=https://api.openai.com/v1
 SEGMIND_BASE_URL=https://api.segmind.com/v1
 
+# Replicate AI Upscaling
+REPLICATE_API_TOKEN=your_replicate_api_token_here
+REPLICATE_TIMEOUT=300000
+REPLICATE_MODEL=nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b
+REPLICATE_SCALE=4
+REPLICATE_FACE_ENHANCE=true
+
 # Таймауты (миллисекунды)
 OPENAI_TIMEOUT=60000
 SEGMIND_TIMEOUT=120000
+REPLICATE_TIMEOUT=300000
 HTTP_TIMEOUT=30000
 
 # FTP для 123RF
@@ -698,13 +707,103 @@ const { stocksEnabled } = response.data.data;
 3. **Seedream V3** - Segmind API
 4. **HiDream-I1 Fast** - Segmind API
 
+#### AI Upscaling Integration:
+- **Real-ESRGAN модель** через Replicate API для улучшения качества
+- **Автоматическое масштабирование** изображений в 4 раза
+- **Улучшение лиц и деталей** с помощью AI алгоритмов
+- **Асинхронная обработка** с polling статуса
+- **Fallback механизм** при недоступности upscaling сервиса
+
 #### Ключевые возможности:
 - **Динамическое переключение** без перезапуска системы
 - **Каскадная система фоллбеков** при сбоях
 - **Polling механизм** для обновления конфигурации
 - **Audit trail** всех изменений
+- **Post-processing pipeline** с AI upscaling
 
 **Подробная документация:** [../doc/AI_MODELS_GUIDE.md](../doc/AI_MODELS_GUIDE.md)
+
+### AI Upscaling Service Integration
+
+#### Replicate Real-ESRGAN Integration:
+
+**Техническая архитектура:**
+- **Провайдер**: Replicate API с моделью Real-ESRGAN
+- **Модель**: `nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b`
+- **Масштабирование**: Увеличение разрешения в 4 раза (4x upscaling)
+- **Улучшение лиц**: Опциональное включение face enhancement
+- **Асинхронная обработка**: Polling-based статус проверка
+
+#### Технический процесс:
+
+```javascript
+// 1. Инициация upscaling
+const prediction = await replicate.predictions.create({
+  version: REPLICATE_MODEL,
+  input: {
+    image: imageUrl,
+    scale: 4,
+    face_enhance: true
+  }
+});
+
+// 2. Polling статуса
+while (prediction.status !== 'succeeded') {
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  prediction = await replicate.predictions.get(prediction.id);
+}
+
+// 3. Получение результата
+const upscaledImageUrl = prediction.output;
+```
+
+#### Ключевые особенности:
+- **Автоматическая интеграция** в pipeline генерации изображений
+- **Fallback механизм** при недоступности Replicate API
+- **Timeout handling** с настраиваемыми лимитами (5 минут)
+- **Error recovery** с retry логикой
+- **Cost optimization** через кэширование результатов
+- **Quality enhancement** для лиц и мелких деталей
+
+#### Конфигурация upscaling:
+
+```bash
+# Replicate API настройки
+REPLICATE_API_TOKEN=r8_your_token_here
+REPLICATE_TIMEOUT=300000                    # 5 минут
+REPLICATE_MODEL=nightmareai/real-esrgan:... # Версия модели
+REPLICATE_SCALE=4                           # Коэффициент масштабирования
+REPLICATE_FACE_ENHANCE=true                 # Улучшение лиц
+```
+
+#### API Endpoints:
+
+```javascript
+// Автоматический upscaling в процессе генерации
+POST /api/images/generate
+{
+  "prompt": "Beautiful landscape",
+  "options": {
+    "upscale": true  // Включение upscaling
+  }
+}
+
+// Ручной upscaling существующего изображения
+POST /api/images/:imageId/upscale
+{
+  "scale": 4,
+  "faceEnhance": true
+}
+
+// Статус upscaling операции
+GET /api/images/:imageId/upscale/status
+```
+
+#### Мониторинг и метрики:
+- **Время обработки** upscaling операций
+- **Успешность** Replicate API запросов
+- **Стоимость** операций (cost tracking)
+- **Качество результатов** (user feedback)
 
 ### Payment System Integration
 
