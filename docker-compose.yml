@@ -78,6 +78,8 @@ services:
       - IMAGE_GENERATION_MAX=${IMAGE_GENERATION_MAX}
       - UPLOAD_WINDOW=${UPLOAD_WINDOW}
       - UPLOAD_MAX=${UPLOAD_MAX}
+      # Feature Flags
+      - STOCKS_ENABLED=${STOCKS_ENABLED}
     volumes:
       # Mount source code for development hot reload
       - ./backend/src:/app/src

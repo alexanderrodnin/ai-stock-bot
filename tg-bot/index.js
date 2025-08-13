@@ -37,6 +37,38 @@ const userSessions = new Map();
 // Image cache for callback operations
 const userImageCache = new Map();
 
+// AI Model cache for performance optimization
+let aiModelCache = {
+  displayName: 'AI модель',
+  lastUpdated: 0,
+  cacheTimeout: 5 * 60 * 1000 // 5 minutes
+};
+
+// Model display names mapping
+const modelDisplayNames = {
+  'juggernaut-pro-flux': 'Juggernaut Pro Flux',
+  'dall-e-3': 'DALL-E 3',
+  'seedream-v3': 'Seedream V3',
+  'hidream-i1-fast': 'HiDream-I1 Fast'
+};
+
+/**
+ * Get active AI model display name with caching
+ */
+async function getActiveModelDisplayName() {
+  try {
+    // Fetch current model from backend
+    const modelInfo = await backendApi.getCurrentAIModel();
+    const displayName = modelDisplayNames[modelInfo.activeModel] || modelInfo.activeModel || 'AI модель';
+    
+    return displayName;
+  } catch (error) {
+    console.error('Error getting active model display name:', error.message);
+    // Return cached value if available, otherwise fallback
+    return aiModelCache.displayName || 'AI модель';
+  }
+}
+
 /**
  * Initialize or get user from backend
  */
@@ -58,6 +90,13 @@ async function initializeUser(telegramUser) {
     };
 
     const result = await backendApi.createOrGetUser(userData);
+    
+    // Ensure user has an id field
+    if (!result.user.id && result.user._id) {
+      result.user.id = result.user._id;
+      console.log('Fixed user ID using _id field:', result.user.id);
+    }
+    
     console.log(`User initialized: ${result.user.id} (${result.user.externalId})`);
     return result;
   } catch (error) {
@@ -71,6 +110,21 @@ async function initializeUser(telegramUser) {
  * Show stock setup menu
  */
 async function showStockSetupMenu(chatId, userId) {
+  // Check if stocks feature is enabled
+  const stocksEnabled = await backendApi.isStocksEnabled();
+  
+  if (!stocksEnabled) {
+    const message = `⚠️ *Функция стоков временно отключена*
+
+Генерация изображений в данный момент недоступна.
+Обратитесь к администратору для получения дополнительной информации.`;
+
+    await bot.sendMessage(chatId, message, {
+      parse_mode: 'Markdown'
+    });
+    return;
+  }
+
   const keyboard = {
     inline_keyboard: [
       [{ text: "🔗 Привязать 123RF", callback_data: "setup_123rf" }],
@@ -147,7 +201,15 @@ async function showSetupHelp(chatId) {
 /**
  * Show upload-only actions menu (for file message)
  */
-function getUploadOnlyKeyboard(imageId, availableServices = []) {
+async function getUploadOnlyKeyboard(imageId, availableServices = []) {
+  // Check if stocks feature is enabled
+  const stocksEnabled = await backendApi.isStocksEnabled();
+  
+  if (!stocksEnabled) {
+    // Return empty keyboard if stocks are disabled
+    return { inline_keyboard: [] };
+  }
+  
   const keyboard = [];
   
   // Add upload buttons for each available service
@@ -237,20 +299,39 @@ bot.onText(/\/start/, async (msg) => {
     // Initialize user
     const { user, isNewUser, trialImagesGranted } = await initializeUser(msg.from);
     
+    // Check if stocks feature is enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    
     // Check if user has any images (including trial images)
     const subscription = await backendApi.getUserSubscription(user.id);
     
+    // Get current AI model name
+    const currentModelName = await getActiveModelDisplayName();
+    
     // 1. Send welcome message with buttons (if user has images)
-    const welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
+    let welcomeMessage;
+    if (stocksEnabled) {
+      welcomeMessage = `🎨 *Добро пожаловать в AI Stock Bot!*
 
 Я помогу вам генерировать изображения с помощью AI и загружать их на площадку стоковых изображений 123RF.
 
 *🤖 AI модель:*
-• Juggernaut Pro Flux
+• ${currentModelName}
 
 *📤 Возможности:*
 • Генерация изображений по текстовому описанию
 • Загрузка сервис стоковых фотографий 123RF`;
+    } else {
+      welcomeMessage = `🎨 *Добро пожаловать в AI Image Bot!*
+
+Я помогу вам генерировать изображения с помощью AI.
+
+*🤖 AI модель:*
+• ${currentModelName}
+
+*📤 Возможности:*
+• Генерация изображений по текстовому описанию`;
+    }
 
     if (subscription.isActive && subscription.imagesRemaining > 0) {
       // User has images - show welcome message with balance and buttons
@@ -261,11 +342,15 @@ bot.onText(/\/start/, async (msg) => {
             { text: "💰 Баланс", callback_data: "menu_balance" }
           ],
           [
-            { text: "💳 Купить изображения", callback_data: "menu_buy" },
-            { text: "⚙️ Мои стоки", callback_data: "menu_mystocks" }
+            { text: "💳 Купить изображения", callback_data: "menu_buy" }
           ]
         ]
       };
+
+      // Add stocks button only if stocks are enabled
+      if (stocksEnabled) {
+        menuKeyboard.inline_keyboard[1].push({ text: "⚙️ Мои стоки", callback_data: "menu_mystocks" });
+      }
 
       await bot.sendMessage(chatId, welcomeMessage, { 
         parse_mode: 'Markdown',
@@ -291,14 +376,16 @@ bot.onText(/\/start/, async (msg) => {
       );
     }
 
-    // 4. Show stock setup warning if stocks are not configured
-    const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
-    if (!hasActiveStocks) {
-      await bot.sendMessage(chatId, 
-        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать стоковый сервис 123RF.',
-        { parse_mode: 'Markdown' }
-      );
-      return showStockSetupMenu(chatId, user.id);
+    // 4. Show stock setup warning if stocks are enabled and not configured
+    if (stocksEnabled) {
+      const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
+      if (!hasActiveStocks) {
+        await bot.sendMessage(chatId, 
+          '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать стоковый сервис 123RF.',
+          { parse_mode: 'Markdown' }
+        );
+        return showStockSetupMenu(chatId, user.id);
+      }
     }
 
     // 5. Everything is ready - show success message
@@ -328,37 +415,56 @@ bot.onText(/\/help/, async (msg) => {
       );
     }
     
-    const helpMessage = `📖 *Справка по использованию*
+    // Check if stocks feature is enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    
+    // Get current AI model name
+    const currentModelName = await getActiveModelDisplayName();
+    
+    let helpMessage = `📖 *Справка по использованию*
 
-*🤖 AI Модели:*
-• **Juggernaut Pro Flux** (по умолчанию) - профессиональные реалистичные изображения
-• **DALL-E 3** (OpenAI) - высококачественная генерация с отличным пониманием промптов
-• **Seedream V3** - художественная и креативная генерация
-• **HiDream-I1 Fast** - быстрая высококачественная генерация
+*🤖 AI Модель:*
+• **${currentModelName}** - профессиональные реалистичные изображения высокого качества
 
 *Генерация изображений:*
 1. Отправьте текстовое описание изображения
-2. Дождитесь генерации (может занять до 30 секунд)
+2. Дождитесь генерации (может занять до 30 секунд)`;
+
+    if (stocksEnabled) {
+      helpMessage += `
 3. Загрузите изображение на 123RF
 
 *Настройка стоков:*
 • Используйте /mystocks для управления сервисом 123RF
-• Нужны **nickname** (не email!) и пароль от аккаунта 123RF
-• Можно настроить автоматическую загрузку
+• Нужны **nickname** (не email!) и пароль от аккаунта 123RF`;
+    }
+
+    helpMessage += `
 
 *Подписка и оплата:*
 • Используйте /balance для проверки баланса изображений
 • Используйте /buy для покупки изображений
-• Доступны тарифы: 10, 100, 1000, 10000 изображений
 
 *Ограничения:*
-• Промт должен быть текстовым и до 1000 символов
+• Промт должен быть текстовым и до 1000 символов`;
+
+    if (stocksEnabled) {
+      helpMessage += `
 • Изображения обрабатываются в формате 4096x4096 для загрузки
-• Соблюдайте правила контента стоковой площадки 123RF
+• Соблюдайте правила контента стоковой площадки 123RF`;
+    }
+
+    helpMessage += `
 
 *Команды:*
-/start - начать работу
-/mystocks - управление стоковым сервисом
+/start - начать работу`;
+
+    if (stocksEnabled) {
+      helpMessage += `
+/mystocks - управление стоковым сервисом`;
+    }
+
+    helpMessage += `
 /balance - проверить баланс изображений
 /buy - купить изображения`;
 
@@ -430,6 +536,14 @@ bot.onText(/\/mystocks/, async (msg) => {
   
   try {
     const { user } = await initializeUser(msg.from);
+    
+    // Check if stocks feature is enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    
+    if (!stocksEnabled) {
+      // Silently ignore the command when stocks are disabled
+      return;
+    }
     
     // Check subscription first
     const subscription = await backendApi.getUserSubscription(user.id);
@@ -539,14 +653,17 @@ bot.on('message', async (msg) => {
       );
     }
 
-    // Only check stocks if subscription is active
-    const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
-    if (!hasActiveStocks) {
-      await bot.sendMessage(chatId, 
-        '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
-        { parse_mode: 'Markdown' }
-      );
-      return showStockSetupMenu(chatId, user.id);
+    // Only check stocks if subscription is active AND stocks are enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    if (stocksEnabled) {
+      const hasActiveStocks = await backendApi.hasActiveStockServices(user.id);
+      if (!hasActiveStocks) {
+        await bot.sendMessage(chatId, 
+          '⚠️ *Необходима настройка стоковых сервисов*\n\nДля генерации изображений нужно привязать хотя бы один стоковый сервис.',
+          { parse_mode: 'Markdown' }
+        );
+        return showStockSetupMenu(chatId, user.id);
+      }
     }
 
     // Only start processing if user has active subscription AND stocks
@@ -624,7 +741,7 @@ bot.on('message', async (msg) => {
         const fileCaption = `📁 Файл изображения\n\n📝 Промт: ${prompt}\n📐 Размер: 4096x4096`;
         
         // Create keyboard with only upload button
-        const uploadKeyboard = getUploadOnlyKeyboard(imageData.id, availableServices);
+        const uploadKeyboard = await getUploadOnlyKeyboard(imageData.id, availableServices);
         
         // Send image as document (file) without compression
         await bot.sendDocument(chatId, imageStreamForFile, {
@@ -1848,37 +1965,56 @@ async function handleHelpCommand(chatId, user) {
       );
     }
     
-    const helpMessage = `📖 *Справка по использованию*
+    // Check if stocks feature is enabled
+    const stocksEnabled = await backendApi.isStocksEnabled();
+    
+    // Get current AI model name
+    const currentModelName = await getActiveModelDisplayName();
+    
+    let helpMessage = `📖 *Справка по использованию*
 
-*🤖 AI Модели:*
-• **Juggernaut Pro Flux** (по умолчанию) - профессиональные реалистичные изображения
-• **DALL-E 3** (OpenAI) - высококачественная генерация с отличным пониманием промптов
-• **Seedream V3** - художественная и креативная генерация
-• **HiDream-I1 Fast** - быстрая высококачественная генерация
+*🤖 AI Модель:*
+• **${currentModelName}** - профессиональные реалистичные изображения высокого качества
 
 *Генерация изображений:*
 1. Отправьте текстовое описание изображения
-2. Дождитесь генерации (может занять до 30 секунд)
+2. Дождитесь генерации (может занять до 30 секунд)`;
+
+    if (stocksEnabled) {
+      helpMessage += `
 3. Загрузите изображение на 123RF
 
 *Настройка стоков:*
 • Используйте /mystocks для управления сервисом 123RF
-• Нужны **nickname** (не email!) и пароль от аккаунта 123RF
-• Можно настроить автоматическую загрузку
+• Нужны **nickname** (не email!) и пароль от аккаунта 123RF`;
+    }
+
+    helpMessage += `
 
 *Подписка и оплата:*
 • Используйте /balance для проверки баланса изображений
 • Используйте /buy для покупки изображений
-• Доступны тарифы: 10, 100, 1000, 10000 изображений
 
 *Ограничения:*
-• Промт должен быть текстовым и до 1000 символов
+• Промт должен быть текстовым и до 1000 символов`;
+
+    if (stocksEnabled) {
+      helpMessage += `
 • Изображения обрабатываются в формате 4096x4096 для загрузки
-• Соблюдайте правила контента стоковой площадки 123RF
+• Соблюдайте правила контента стоковой площадки 123RF`;
+    }
+
+    helpMessage += `
 
 *Команды:*
-/start - начать работу
-/mystocks - управление стоковым сервисом
+/start - начать работу`;
+
+    if (stocksEnabled) {
+      helpMessage += `
+/mystocks - управление стоковым сервисом`;
+    }
+
+    helpMessage += `
 /balance - проверить баланс изображений
 /buy - купить изображения`;
 

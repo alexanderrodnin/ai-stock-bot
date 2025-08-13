@@ -202,6 +202,11 @@ const config = {
   // Trial subscription configuration
   trial: {
     imagesCount: parseInt(process.env.TRIAL_IMAGES_COUNT) || 10
+  },
+
+  // Feature flags configuration
+  features: {
+    stocksEnabled: process.env.STOCKS_ENABLED === 'true'
   }
 };
 

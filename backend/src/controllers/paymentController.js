@@ -141,10 +141,20 @@ const getUserSubscription = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    if (!userId) {
+    if (!userId || userId === 'undefined' || userId === 'null') {
+      logger.error('Invalid user ID provided', { userId });
       return res.status(400).json({
         success: false,
-        error: 'User ID is required'
+        error: 'Valid User ID is required'
+      });
+    }
+
+    // Validate ObjectId format
+    if (!userId.match(/^[0-9a-fA-F]{24}$/)) {
+      logger.error('Invalid ObjectId format', { userId });
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid User ID format'
       });
     }
 
