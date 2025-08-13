@@ -17,7 +17,8 @@ class HiDreamI1Service {
     this.defaultParams = {
       model_type: 'fast',
       output_format: 'jpg',
-      output_quality: 100
+      output_quality: 100,
+      resolution: '1024 × 1024 (Square)'  // Fixed 1024x1024 for AI upscaling
     };
 
     // Initialize axios instance

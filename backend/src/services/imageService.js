@@ -19,6 +19,7 @@ const configService = require('./configService');
 const JuggernautProFluxService = require('./aiProviders/juggernautProFluxService');
 const SeedreamV3Service = require('./aiProviders/seedreamV3Service');
 const HiDreamI1Service = require('./aiProviders/hiDreamI1Service');
+const upscaleService = require('./upscaleService');
 
 class ImageService {
   constructor() {
@@ -506,34 +507,186 @@ class ImageService {
   }
 
   /**
-   * Process image buffer and save to storage
+   * Process image buffer with AI upscaling (main method)
    * @param {Buffer} imageBuffer - Image buffer
    * @param {Object} metadata - Additional metadata
    * @returns {Promise<Object>} File information
    */
   async processImageBuffer(imageBuffer, metadata = {}) {
+    const { demoMode = false } = metadata;
+
     try {
       // Validate file size
       if (imageBuffer.length > this.maxFileSize) {
         throw new Error(`Image size ${imageBuffer.length} exceeds maximum allowed size ${this.maxFileSize}`);
       }
 
-      // Get image metadata using sharp
-      const imageMetadata = await sharp(imageBuffer).metadata();
+      // Get original image metadata
+      const originalMetadata = await sharp(imageBuffer).metadata();
+      
+      logger.info('Starting image processing', {
+        originalSize: `${originalMetadata.width}x${originalMetadata.height}`,
+        originalFileSize: imageBuffer.length,
+        demoMode,
+        upscaleAvailable: upscaleService.isAvailable()
+      });
+
+      if (demoMode) {
+        // Demo mode - use Sharp fallback
+        logger.info('Demo mode: using Sharp fallback processing');
+        return await this.processImageWithSharp(imageBuffer, metadata, 'sharp_resize');
+      } else {
+        // Production mode - try AI upscaling first
+        try {
+          return await this.processImageWithAIUpscale(imageBuffer, metadata);
+        } catch (upscaleError) {
+          // Fallback to Sharp if AI upscaling fails
+          logger.warn('AI upscaling failed, using Sharp fallback', {
+            error: upscaleError.message
+          });
+          return await this.processImageWithSharp(imageBuffer, metadata, 'sharp_fallback', upscaleError.message);
+        }
+      }
+
+    } catch (error) {
+      logger.error('Failed to process image buffer', {
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Process image with AI upscaling
+   * @param {Buffer} imageBuffer - Image buffer
+   * @param {Object} metadata - Additional metadata
+   * @returns {Promise<Object>} File information
+   */
+  async processImageWithAIUpscale(imageBuffer, metadata = {}) {
+    const startTime = Date.now();
+
+    try {
+      // Get original image metadata
+      const originalMetadata = await sharp(imageBuffer).metadata();
+      
+      logger.info('Starting AI upscaling process', {
+        originalSize: `${originalMetadata.width}x${originalMetadata.height}`,
+        originalFileSize: imageBuffer.length,
+        targetSize: '4096x4096'
+      });
+
+      // Step 1: AI upscaling using Replicate Real-ESRGAN
+      const upscaledBuffer = await upscaleService.upscaleImage(imageBuffer);
+
+      // Step 2: Generate final filename
+      const tempHash = crypto.createHash('sha256').update(upscaledBuffer).digest('hex');
+      const finalFilename = `${Date.now()}_${tempHash.substring(0, 16)}.jpg`;
+      const finalFilePath = path.join(this.tempDir, finalFilename);
+
+      // Step 3: Final processing with Sharp for optimization
+      await sharp(upscaledBuffer)
+        .jpeg({
+          quality: 90,        // High quality for AI upscaled image
+          progressive: false,
+          mozjpeg: true,
+          chromaSubsampling: '4:4:4'
+        })
+        .withMetadata()
+        .withExif({
+          IFD0: {
+            XResolution: '300/1',
+            YResolution: '300/1',
+            ResolutionUnit: '2'
+          }
+        })
+        .toColorspace('srgb')
+        .toFile(finalFilePath);
+
+      // Step 4: Get final image metadata
+      const finalImageMetadata = await sharp(finalFilePath).metadata();
+      const finalStats = await fs.stat(finalFilePath);
+      const finalSize = finalStats.size;
+
+      // Step 5: Generate hash of processed image
+      const verificationBuffer = await fs.readFile(finalFilePath);
+      const finalHash = crypto.createHash('sha256').update(verificationBuffer).digest('hex');
+
+      const processingTime = Date.now() - startTime;
+
+      logger.info('AI upscaling completed successfully', {
+        originalSize: `${originalMetadata.width}x${originalMetadata.height}`,
+        finalSize: `${finalImageMetadata.width}x${finalImageMetadata.height}`,
+        originalFileSize: imageBuffer.length,
+        finalFileSize: finalSize,
+        processingTime: `${processingTime}ms`,
+        method: 'ai_upscale'
+      });
+
+      return {
+        originalFilename: 'ai_generated_image.jpg',
+        filename: finalFilename,
+        path: finalFilePath,
+        size: finalSize,
+        mimeType: 'image/jpeg',
+        width: finalImageMetadata.width,
+        height: finalImageMetadata.height,
+        hash: finalHash,
+        processing: {
+          method: 'ai_upscale',
+          upscaleProvider: 'replicate',
+          processingTime,
+          originalWidth: originalMetadata.width,
+          originalHeight: originalMetadata.height,
+          originalSize: imageBuffer.length,
+          resized: true,
+          qualityImprovement: true,
+          metadata: {
+            upscaleModel: 'real-esrgan',
+            scale: 4,
+            faceEnhance: true
+          }
+        }
+      };
+
+    } catch (error) {
+      logger.error('AI upscaling failed', {
+        error: error.message,
+        processingTime: Date.now() - startTime
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Process image with Sharp (fallback method)
+   * @param {Buffer} imageBuffer - Image buffer
+   * @param {Object} metadata - Additional metadata
+   * @param {string} method - Processing method ('sharp_resize' or 'sharp_fallback')
+   * @param {string} fallbackReason - Reason for fallback (if applicable)
+   * @returns {Promise<Object>} File information
+   */
+  async processImageWithSharp(imageBuffer, metadata = {}, method = 'sharp_resize', fallbackReason = null) {
+    const startTime = Date.now();
+
+    try {
+      // Get original image metadata
+      const originalMetadata = await sharp(imageBuffer).metadata();
       
       // Generate final filename
       const tempHash = crypto.createHash('sha256').update(imageBuffer).digest('hex');
       const finalFilename = `${Date.now()}_${tempHash.substring(0, 16)}.jpg`;
       const finalFilePath = path.join(this.tempDir, finalFilename);
 
-      logger.info('Processing image buffer with Sharp', {
-        originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
+      logger.info('Processing image with Sharp', {
+        originalSize: `${originalMetadata.width}x${originalMetadata.height}`,
         originalFileSize: imageBuffer.length,
-        targetSize: '4096x4096'
+        targetSize: '4096x4096',
+        method,
+        fallbackReason
       });
 
-      // Process image with sharp
-      const processedImage = await sharp(imageBuffer)
+      // Process image with Sharp
+      await sharp(imageBuffer)
         .resize({
           width: 4096,
           height: 4096,
@@ -567,15 +720,19 @@ class ImageService {
       const verificationBuffer = await fs.readFile(finalFilePath);
       const finalHash = crypto.createHash('sha256').update(verificationBuffer).digest('hex');
 
-      logger.info('Image buffer processed successfully', {
-        originalSize: `${imageMetadata.width}x${imageMetadata.height}`,
-        processedSize: `${finalImageMetadata.width}x${finalImageMetadata.height}`,
+      const processingTime = Date.now() - startTime;
+
+      logger.info('Sharp processing completed', {
+        originalSize: `${originalMetadata.width}x${originalMetadata.height}`,
+        finalSize: `${finalImageMetadata.width}x${finalImageMetadata.height}`,
         originalFileSize: imageBuffer.length,
-        processedFileSize: finalSize
+        finalFileSize: finalSize,
+        processingTime: `${processingTime}ms`,
+        method
       });
 
       return {
-        originalFilename: 'generated_image.png',
+        originalFilename: 'generated_image.jpg',
         filename: finalFilename,
         path: finalFilePath,
         size: finalSize,
@@ -584,16 +741,27 @@ class ImageService {
         height: finalImageMetadata.height,
         hash: finalHash,
         processing: {
-          originalWidth: imageMetadata.width,
-          originalHeight: imageMetadata.height,
+          method,
+          upscaleProvider: 'sharp',
+          processingTime,
+          originalWidth: originalMetadata.width,
+          originalHeight: originalMetadata.height,
           originalSize: imageBuffer.length,
-          resized: finalImageMetadata.width !== imageMetadata.width || finalImageMetadata.height !== imageMetadata.height
+          resized: finalImageMetadata.width !== originalMetadata.width || finalImageMetadata.height !== originalMetadata.height,
+          qualityImprovement: false,
+          fallbackReason,
+          metadata: {
+            sharpResize: true,
+            fit: 'cover'
+          }
         }
       };
 
     } catch (error) {
-      logger.error('Failed to process image buffer', {
-        error: error.message
+      logger.error('Sharp processing failed', {
+        error: error.message,
+        method,
+        processingTime: Date.now() - startTime
       });
       throw error;
     }

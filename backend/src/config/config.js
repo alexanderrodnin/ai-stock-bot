@@ -61,6 +61,15 @@ const config = {
     }
   },
 
+  // Replicate configuration for AI upscaling
+  replicate: {
+    apiKey: process.env.REPLICATE_API_TOKEN,
+    timeout: parseInt(process.env.REPLICATE_TIMEOUT) || 300000, // 5 minutes for upscaling
+    model: process.env.REPLICATE_MODEL || 'nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b',
+    scale: parseInt(process.env.REPLICATE_SCALE) || 4,
+    faceEnhance: process.env.REPLICATE_FACE_ENHANCE !== 'false' // Default true
+  },
+
 
   // File storage configuration
   storage: {
