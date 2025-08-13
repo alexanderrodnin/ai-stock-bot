@@ -15,7 +15,7 @@ class SeedreamV3Service {
     
     // Static parameters for Seedream V3 (1:1 aspect ratio for stock images)
     this.defaultParams = {
-      aspect_ratio: '1:1',
+      aspect_ratio: '1:1',  // Fixed 1:1 for AI upscaling
       guidance_scale: 2.5
     };
 

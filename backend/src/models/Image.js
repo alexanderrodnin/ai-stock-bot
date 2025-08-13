@@ -197,6 +197,70 @@ const imageSchema = new mongoose.Schema({
     originalUrl: {
       type: String,
       trim: true
+    },
+
+    // Image processing information
+    processing: {
+      // Processing method used
+      method: {
+        type: String,
+        enum: ['ai_upscale', 'sharp_resize', 'sharp_fallback'],
+        default: 'ai_upscale'
+      },
+
+      // Upscale provider used
+      upscaleProvider: {
+        type: String,
+        enum: ['replicate', 'sharp'],
+        default: 'replicate'
+      },
+
+      // Processing time in milliseconds
+      processingTime: {
+        type: Number,
+        min: 0
+      },
+
+      // Original image dimensions before processing
+      originalWidth: {
+        type: Number,
+        min: 1
+      },
+
+      originalHeight: {
+        type: Number,
+        min: 1
+      },
+
+      // Original file size before processing
+      originalSize: {
+        type: Number,
+        min: 0
+      },
+
+      // Whether image was resized/upscaled
+      resized: {
+        type: Boolean,
+        default: false
+      },
+
+      // Quality improvement flag
+      qualityImprovement: {
+        type: Boolean,
+        default: false
+      },
+
+      // Fallback reason if AI upscaling failed
+      fallbackReason: {
+        type: String,
+        trim: true
+      },
+
+      // Processing metadata
+      metadata: {
+        type: mongoose.Schema.Types.Mixed,
+        default: {}
+      }
     }
   },
 

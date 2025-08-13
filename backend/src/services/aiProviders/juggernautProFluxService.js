@@ -15,8 +15,8 @@ class JuggernautProFluxService {
     
     // Static parameters for Juggernaut Pro Flux (1:1 aspect ratio for stock images)
     this.defaultParams = {
-      width: 1024,
-      height: 1024,
+      width: 1024,   // Fixed size for AI upscaling
+      height: 1024,  // Fixed size for AI upscaling
       steps: 25,
       CFGScale: 7,
       outputFormat: 'JPG',
