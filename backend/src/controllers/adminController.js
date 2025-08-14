@@ -342,9 +342,7 @@ class AdminController {
           description: modelConfig.description,
           enabled: modelConfig.enabled,
           active: aiConfig.activeModel === modelName,
-          configured: modelConfig.provider === 'openai' 
-            ? !!process.env.OPENAI_API_KEY 
-            : !!process.env.SEGMIND_API_KEY
+          configured: !!process.env.SEGMIND_API_KEY
         };
         providers.push(provider);
       }

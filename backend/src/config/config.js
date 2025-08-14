@@ -38,16 +38,6 @@ const config = {
     }
   },
 
-  // OpenAI configuration
-  openai: {
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-    timeout: parseInt(process.env.OPENAI_TIMEOUT) || 60000,
-    models: {
-      dalle3: 'dall-e-3',
-      dalle2: 'dall-e-2'
-    }
-  },
 
   // Segmind configuration
   segmind: {
@@ -180,12 +170,11 @@ const config = {
     // Default AI model (changed from dall-e-3 to juggernaut-pro-flux)
     defaultModel: process.env.DEFAULT_AI_MODEL || 'juggernaut-pro-flux',
     
-    // Fallback order: Juggernaut Pro Flux -> HiDream-I1 -> Seedream V3 -> DALL-E 3 -> Mock
+    // Fallback order: Juggernaut Pro Flux -> HiDream-I1 -> Seedream V3 -> Mock
     fallbackOrder: [
       'juggernaut-pro-flux',
       'hidream-i1-fast',
-      'seedream-v3',
-      'dall-e-3'
+      'seedream-v3'
     ],
     
     // Model availability check intervals (in milliseconds)
@@ -213,7 +202,6 @@ const config = {
 // Validation function
 const validateConfig = () => {
   const required = [
-    'OPENAI_API_KEY',
     'MONGODB_URI'
   ];
 

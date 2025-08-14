@@ -39,7 +39,7 @@ const imageSchema = new mongoose.Schema({
       maxlength: 4000
     },
 
-    // Revised prompt (from OpenAI)
+    // Revised prompt (from AI provider)
     revisedPrompt: {
       type: String,
       trim: true,
@@ -51,28 +51,26 @@ const imageSchema = new mongoose.Schema({
       type: String,
       required: true,
       enum: [
-        'dall-e-2', 
-        'dall-e-3', 
         'juggernaut-pro-flux',
         'seedream-v3', 
         'hidream-i1-fast',
         'fallback', 
         'demo'
       ],
-      default: 'dall-e-3'
+      default: 'juggernaut-pro-flux'
     },
 
     // AI provider used for generation
     provider: {
       type: String,
-      enum: ['openai', 'segmind', 'fallback', 'demo'],
-      default: 'openai'
+      enum: ['segmind', 'fallback', 'demo'],
+      default: 'segmind'
     },
 
-    // Source of the image (OpenAI or fallback)
+    // Source of the image (AI provider or fallback)
     usedSource: {
       type: String,
-      default: 'OpenAI'
+      default: 'Segmind'
     },
 
     // Reason for fallback (if applicable)
@@ -82,7 +80,7 @@ const imageSchema = new mongoose.Schema({
         'Authentication Failed',
         'API Key Invalid or Forbidden', 
         'Quota Exceeded', 
-        'OpenAI Server Error',
+        'Server Error',
         'Content Policy Restriction', 
         'Request Timeout',
         'Network Error',
@@ -119,14 +117,6 @@ const imageSchema = new mongoose.Schema({
       required: true
     },
 
-    // OpenAI response metadata (legacy)
-    openaiResponse: {
-      created: Number,
-      data: [{
-        url: String,
-        revised_prompt: String
-      }]
-    },
 
     // AI response metadata (unified for all providers)
     aiResponse: {
@@ -143,7 +133,7 @@ const imageSchema = new mongoose.Schema({
 
   // Image file information
   file: {
-    // Original filename from OpenAI
+    // Original filename from AI provider
     originalFilename: {
       type: String,
       trim: true
@@ -193,7 +183,7 @@ const imageSchema = new mongoose.Schema({
       type: String
     },
 
-    // Original URL from OpenAI (temporary)
+    // Original URL from AI provider (temporary)
     originalUrl: {
       type: String,
       trim: true

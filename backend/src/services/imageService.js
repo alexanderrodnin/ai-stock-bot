@@ -8,7 +8,6 @@ const path = require('path');
 const crypto = require('crypto');
 const axios = require('axios');
 const sharp = require('sharp');
-const { OpenAI } = require('openai');
 
 const config = require('../config/config');
 const User = require('../models/User');
@@ -23,12 +22,6 @@ const upscaleService = require('./upscaleService');
 
 class ImageService {
   constructor() {
-    this.openai = new OpenAI({
-      apiKey: config.openai.apiKey,
-      baseURL: config.openai.baseURL,
-      timeout: config.openai.timeout
-    });
-    
     // Initialize AI provider services
     this.juggernautProFlux = new JuggernautProFluxService();
     this.seedreamV3 = new SeedreamV3Service();
@@ -51,7 +44,7 @@ class ImageService {
   }
 
   /**
-   * Generate image using dynamic AI models (OpenAI DALL-E or Segmind Fast-Flux-Schnell)
+   * Generate image using dynamic AI models (Segmind providers)
    * @param {Object} params - Generation parameters
    * @param {string} params.prompt - Text prompt for image generation
    * @param {string} params.userId - User ID (MongoDB ObjectId)
@@ -143,8 +136,6 @@ class ImageService {
               generationResult = await this.generateWithSeedreamV3(prompt, options);
             } else if (modelName === 'hidream-i1-fast') {
               generationResult = await this.generateWithHiDreamI1(prompt, options);
-            } else if (modelName === 'dall-e-3') {
-              generationResult = await this.generateWithOpenAI(prompt, options);
             } else {
               throw new Error(`Unknown model: ${modelName}`);
             }
@@ -368,74 +359,6 @@ class ImageService {
     }
   }
 
-  /**
-   * Generate image using OpenAI DALL-E
-   * @param {string} prompt - Text prompt
-   * @param {Object} options - Generation options
-   * @returns {Promise<Object>} Generation result
-   */
-  async generateWithOpenAI(prompt, options = {}) {
-    try {
-      // Sanitize the prompt to improve chances of passing content filters
-      const sanitizedPrompt = `Create a safe, appropriate digital illustration of: ${prompt.trim()}. Make it suitable for all audiences, non-political, non-controversial, and with no text.`;
-
-      const generationParams = {
-        model: options.model || 'dall-e-3',
-        prompt: sanitizedPrompt,
-        n: 1,
-        size: options.size || '1024x1024',
-        response_format: 'url'
-      };
-
-      // Add DALL-E 3 specific parameters
-      if (generationParams.model === 'dall-e-3') {
-        generationParams.quality = options.quality || 'standard';
-        generationParams.style = options.style || 'vivid';
-      }
-
-      logger.info('Generating image with OpenAI DALL-E', {
-        model: generationParams.model,
-        size: generationParams.size,
-        quality: generationParams.quality,
-        style: generationParams.style
-      });
-
-      const response = await this.openai.images.generate(generationParams);
-
-      if (!response.data || response.data.length === 0) {
-        throw new Error('No image data received from OpenAI');
-      }
-
-      const imageData = response.data[0];
-
-      return {
-        success: true,
-        model: generationParams.model,
-        provider: 'openai',
-        prompt: sanitizedPrompt,
-        image: {
-          format: 'url',
-          data: imageData.url,
-          mimeType: 'image/png'
-        },
-        metadata: {
-          width: parseInt(generationParams.size.split('x')[0]),
-          height: parseInt(generationParams.size.split('x')[1]),
-          quality: generationParams.quality,
-          style: generationParams.style,
-          generatedAt: new Date().toISOString(),
-          revisedPrompt: imageData.revised_prompt
-        }
-      };
-
-    } catch (error) {
-      logger.error('OpenAI generation failed', {
-        error: error.message,
-        status: error.status
-      });
-      throw error;
-    }
-  }
 
   /**
    * Generate image using Juggernaut Pro Flux

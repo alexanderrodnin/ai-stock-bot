@@ -7,9 +7,9 @@ let DEMO_MODE = process.env.DEMO_MODE === 'true';
 let demoModeActivatedByError = false;
 
 if (DEMO_MODE) {
-  console.log('Running in DEMO MODE - using mock images instead of OpenAI API');
+  console.log('Running in DEMO MODE - using mock images instead of AI API');
 } else {
-  console.log('Running in NORMAL MODE - using backend API with OpenAI integration');
+  console.log('Running in NORMAL MODE - using backend API with AI integration');
 }
 
 // Check for required environment variables
@@ -47,7 +47,6 @@ let aiModelCache = {
 // Model display names mapping
 const modelDisplayNames = {
   'juggernaut-pro-flux': 'Juggernaut Pro Flux',
-  'dall-e-3': 'DALL-E 3',
   'seedream-v3': 'Seedream V3',
   'hidream-i1-fast': 'HiDream-I1 Fast'
 };
@@ -679,7 +678,7 @@ bot.on('message', async (msg) => {
         prompt: prompt,
         demoMode: DEMO_MODE,
         options: {
-          model: 'dall-e-3',
+          model: 'juggernaut-pro-flux',
           size: '1024x1024',
           quality: 'standard',
           style: 'vivid'

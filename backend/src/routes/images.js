@@ -36,8 +36,8 @@ const validateImageGeneration = [
   
   body('model')
     .optional()
-    .isIn(['dall-e-3', 'dall-e-2'])
-    .withMessage('Model must be either dall-e-3 or dall-e-2'),
+    .isIn(['juggernaut-pro-flux', 'seedream-v3', 'hidream-i1-fast'])
+    .withMessage('Model must be one of: juggernaut-pro-flux, seedream-v3, hidream-i1-fast'),
   
   body('size')
     .optional()

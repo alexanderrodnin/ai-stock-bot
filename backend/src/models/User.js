@@ -68,8 +68,8 @@ const userSchema = new mongoose.Schema({
     image: {
       defaultModel: {
         type: String,
-        enum: ['dall-e-2', 'dall-e-3'],
-        default: 'dall-e-3'
+        enum: ['juggernaut-pro-flux', 'seedream-v3', 'hidream-i1-fast'],
+        default: 'juggernaut-pro-flux'
       },
       defaultSize: {
         type: String,

@@ -21,8 +21,8 @@
   "keywords": [
     "api",
     "express",
-    "openai",
-    "dalle",
+    "segmind",
+    "ai-images",
     "stock-images",
     "123rf",
     "image-generation"
@@ -44,7 +44,6 @@
     "mongoose": "^8.0.3",
     "morgan": "^1.10.0",
     "multer": "^1.4.5-lts.1",
-    "openai": "^5.8.2",
     "replicate": "^0.34.1",
     "sharp": "^0.34.2",
     "uuid": "^9.0.1"

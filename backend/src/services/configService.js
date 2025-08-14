@@ -394,11 +394,6 @@ class ConfigService {
         const defaultConfig = {
           activeModel: 'juggernaut-pro-flux',
           models: {
-            'dall-e-3': {
-              enabled: true,
-              provider: 'openai',
-              description: 'OpenAI DALL-E 3 - High quality image generation'
-            },
             'juggernaut-pro-flux': {
               enabled: true,
               provider: 'segmind',
@@ -457,16 +452,19 @@ class ConfigService {
           }
         }
 
-        // Remove deprecated fast-flux-schnell model
-        if (currentConfig.models['fast-flux-schnell']) {
-          delete currentConfig.models['fast-flux-schnell'];
-          needsUpdate = true;
-          logger.info('Removed deprecated model: fast-flux-schnell');
-          
-          // If active model was the deprecated one, switch to default
-          if (currentConfig.activeModel === 'fast-flux-schnell') {
-            currentConfig.activeModel = 'dall-e-3';
-            logger.info('Switched active model from deprecated fast-flux-schnell to dall-e-3');
+        // Remove deprecated models
+        const deprecatedModels = ['fast-flux-schnell', 'dall-e-3'];
+        for (const deprecatedModel of deprecatedModels) {
+          if (currentConfig.models[deprecatedModel]) {
+            delete currentConfig.models[deprecatedModel];
+            needsUpdate = true;
+            logger.info(`Removed deprecated model: ${deprecatedModel}`);
+            
+            // If active model was the deprecated one, switch to default
+            if (currentConfig.activeModel === deprecatedModel) {
+              currentConfig.activeModel = 'juggernaut-pro-flux';
+              logger.info(`Switched active model from deprecated ${deprecatedModel} to juggernaut-pro-flux`);
+            }
           }
         }
 
@@ -498,11 +496,6 @@ class ConfigService {
     return config || {
       activeModel: 'juggernaut-pro-flux',
       models: {
-        'dall-e-3': {
-          enabled: true,
-          provider: 'openai',
-          description: 'OpenAI DALL-E 3 - High quality image generation'
-        },
         'juggernaut-pro-flux': {
           enabled: true,
           provider: 'segmind',

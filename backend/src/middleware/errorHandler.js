@@ -49,20 +49,20 @@ const errorHandler = (err, req, res, next) => {
     error = new AppError(message, 400, 'VALIDATION_ERROR');
   }
 
-  // OpenAI API errors
+  // AI API errors
   if (err.response && err.response.status) {
     switch (err.response.status) {
       case 401:
-        error = new AppError('Invalid OpenAI API key', 401, 'OPENAI_AUTH_ERROR');
+        error = new AppError('Invalid AI API key', 401, 'AI_AUTH_ERROR');
         break;
       case 429:
-        error = new AppError('OpenAI rate limit exceeded', 429, 'OPENAI_RATE_LIMIT');
+        error = new AppError('AI API rate limit exceeded', 429, 'AI_RATE_LIMIT');
         break;
       case 400:
-        error = new AppError('Invalid request to OpenAI', 400, 'OPENAI_BAD_REQUEST');
+        error = new AppError('Invalid request to AI API', 400, 'AI_BAD_REQUEST');
         break;
       default:
-        error = new AppError('OpenAI service error', 500, 'OPENAI_SERVICE_ERROR');
+        error = new AppError('AI service error', 500, 'AI_SERVICE_ERROR');
     }
   }
 
