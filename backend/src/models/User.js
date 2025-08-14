@@ -402,7 +402,28 @@ userSchema.pre('save', function(next) {
     this.stats.totalRequests += 1;
   }
   
+  // Migration: Handle legacy DALL-E model preferences
+  if (this.preferences?.image?.defaultModel) {
+    const legacyModels = ['dall-e-2', 'dall-e-3'];
+    if (legacyModels.includes(this.preferences.image.defaultModel)) {
+      this.preferences.image.defaultModel = 'juggernaut-pro-flux';
+    }
+  }
+  
   next();
+});
+
+// Post-init middleware to handle legacy data when loading from database
+userSchema.post('init', function() {
+  // Migration: Handle legacy DALL-E model preferences on load
+  if (this.preferences?.image?.defaultModel) {
+    const legacyModels = ['dall-e-2', 'dall-e-3'];
+    if (legacyModels.includes(this.preferences.image.defaultModel)) {
+      this.preferences.image.defaultModel = 'juggernaut-pro-flux';
+      // Mark as modified so it gets saved on next save
+      this.markModified('preferences.image.defaultModel');
+    }
+  }
 });
 
 // Static methods
