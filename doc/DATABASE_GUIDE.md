@@ -258,8 +258,8 @@ docker logs ai-stock-bot-mongodb-1 --tail 100 -f
   // Предпочтения пользователя
   preferences: {
     image: {
-      defaultModel: String,     // "dall-e-2", "dall-e-3"
-      defaultSize: String,      // "256x256", "512x512", "1024x1024", "1792x1024", "1024x1792"
+      defaultModel: String,     // "juggernaut-pro-flux", "seedream-v3", "hidream-i1-fast"
+      defaultSize: String,      // "1024x1024"
       defaultQuality: String,   // "standard", "hd"
       defaultStyle: String      // "vivid", "natural"
     },
@@ -435,8 +435,8 @@ docker logs ai-stock-bot-mongodb-1 --tail 100 -f
   generation: {
     prompt: String,             // Оригинальный промпт (макс 4000 символов)
     revisedPrompt: String,      // Исправленный промпт от AI (макс 4000 символов)
-    model: String,              // "dall-e-2", "dall-e-3", "juggernaut-pro-flux", "seedream-v3", "hidream-i1-fast"
-    provider: String,           // "openai", "segmind", "fallback", "demo"
+    model: String,              // "juggernaut-pro-flux", "seedream-v3", "hidream-i1-fast"
+    provider: String,           // "segmind", "fallback", "demo"
     usedSource: String,         // Источник изображения
     fallbackReason: String,     // Причина фоллбека если применимо
     
@@ -448,13 +448,6 @@ docker logs ai-stock-bot-mongodb-1 --tail 100 -f
     generatedAt: Date,
     
     // Ответы от AI провайдеров
-    openaiResponse: {           // Legacy для OpenAI
-      created: Number,
-      data: [{
-        url: String,
-        revised_prompt: String
-      }]
-    },
     aiResponse: Mixed,          // Унифицированный ответ от любого провайдера
     configVersion: Number       // Версия конфигурации при генерации
   },
@@ -591,11 +584,19 @@ docker logs ai-stock-bot-mongodb-1 --tail 100 -f
         endpoint: "https://api.segmind.com/v1/juggernaut-pro-flux",
         maxRetries: 3
       },
-      "dall-e-3": {
+      "seedream-v3": {
         enabled: true,
-        provider: "openai",
+        provider: "segmind",
         priority: 2,
-        maxRetries: 2
+        endpoint: "https://api.segmind.com/v1/seedream-v3",
+        maxRetries: 3
+      },
+      "hidream-i1-fast": {
+        enabled: true,
+        provider: "segmind",
+        priority: 3,
+        endpoint: "https://api.segmind.com/v1/hidream-i1-fast",
+        maxRetries: 3
       }
     }
   }

@@ -22,7 +22,7 @@ RESTful API backend для AI Stock Bot - системы генерации из
 - **Node.js** 18+ (рекомендуется 20+)
 - **MongoDB** 7.0+ 
 - **Docker** и Docker Compose (для контейнеризации)
-- API ключи: OpenAI, Segmind, YooMoney
+- API ключи: Segmind, Replicate, YooMoney
 
 ### Установка и запуск
 
@@ -187,7 +187,8 @@ class ConfigService {
 const createAIProvider = (modelName) => {
   switch(modelName) {
     case 'juggernaut-pro-flux': return new JuggernautProFluxService();
-    case 'dall-e-3': return new OpenAIService();
+    case 'seedream-v3': return new SeedreamV3Service();
+    case 'hidream-i1-fast': return new HiDreamI1Service();
     // ...
   }
 };
@@ -377,7 +378,6 @@ GET    /api/admin/configs                     # Все конфигурации
 MONGODB_URI=mongodb://admin:password@localhost:27017/ai-stock-bot?authSource=admin
 
 # AI провайдеры
-OPENAI_API_KEY=your_openai_api_key_here
 SEGMIND_API_KEY=your_segmind_api_key_here
 
 # Платежная система YooMoney
@@ -398,7 +398,6 @@ NODE_ENV=development
 HOST=0.0.0.0
 
 # AI провайдеры - URLs
-OPENAI_BASE_URL=https://api.openai.com/v1
 SEGMIND_BASE_URL=https://api.segmind.com/v1
 
 # Replicate AI Upscaling
@@ -409,7 +408,6 @@ REPLICATE_SCALE=4
 REPLICATE_FACE_ENHANCE=true
 
 # Таймауты (миллисекунды)
-OPENAI_TIMEOUT=60000
 SEGMIND_TIMEOUT=120000
 REPLICATE_TIMEOUT=300000
 HTTP_TIMEOUT=30000
@@ -469,8 +467,7 @@ module.exports = {
     fallbackOrder: [
       'juggernaut-pro-flux',
       'hidream-i1-fast',
-      'seedream-v3',
-      'dall-e-3'
+      'seedream-v3'
     ],
     defaultModel: 'juggernaut-pro-flux'
   }
@@ -703,9 +700,8 @@ const { stocksEnabled } = response.data.data;
 
 #### Поддерживаемые модели:
 1. **Juggernaut Pro Flux** (по умолчанию) - Segmind API
-2. **DALL-E 3** - OpenAI API  
-3. **Seedream V3** - Segmind API
-4. **HiDream-I1 Fast** - Segmind API
+2. **Seedream V3** - Segmind API
+3. **HiDream-I1 Fast** - Segmind API
 
 #### AI Upscaling Integration:
 - **Real-ESRGAN модель** через Replicate API для улучшения качества
@@ -1126,8 +1122,8 @@ curl -X POST http://localhost:3000/api/payments/create \
 curl -X POST http://localhost:3000/api/admin/config/ai-model/switch \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "dall-e-3",
-    "reason": "Testing OpenAI model for better quality"
+    "model": "seedream-v3",
+    "reason": "Testing Seedream V3 model for better quality"
   }'
 ```
 

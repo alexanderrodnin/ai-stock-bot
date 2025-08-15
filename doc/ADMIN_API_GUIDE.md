@@ -48,8 +48,8 @@
     },
     "configuration": {
       "activeModel": "juggernaut-pro-flux",
-      "totalModels": 4,
-      "enabledModels": 4,
+      "totalModels": 3,
+      "enabledModels": 3,
       "pollingEnabled": true,
       "pollingInterval": 30000
     },
@@ -60,14 +60,6 @@
         "description": "Juggernaut Pro Flux - Professional quality realistic images",
         "enabled": true,
         "active": true,
-        "configured": true
-      },
-      {
-        "model": "dall-e-3",
-        "provider": "openai",
-        "description": "OpenAI DALL-E 3 - High quality image generation",
-        "enabled": true,
-        "active": false,
         "configured": true
       },
       {
@@ -113,11 +105,6 @@
           "provider": "segmind",
           "description": "Juggernaut Pro Flux - Professional quality realistic images"
         },
-        "dall-e-3": {
-          "enabled": true,
-          "provider": "openai",
-          "description": "OpenAI DALL-E 3 - High quality image generation"
-        },
         "seedream-v3": {
           "enabled": true,
           "provider": "segmind",
@@ -156,11 +143,6 @@
         "provider": "segmind",
         "description": "Juggernaut Pro Flux - Professional quality realistic images"
       },
-      "dall-e-3": {
-        "enabled": true,
-        "provider": "openai",
-        "description": "OpenAI DALL-E 3 - High quality image generation"
-      },
       "seedream-v3": {
         "enabled": true,
         "provider": "segmind",
@@ -172,8 +154,8 @@
         "description": "HiDream-I1 Fast - Quick high-quality image generation"
       }
     },
-    "totalModels": 4,
-    "enabledModels": 4
+    "totalModels": 3,
+    "enabledModels": 3
   }
 }
 ```
@@ -197,12 +179,6 @@
         "active": true
       },
       {
-        "name": "dall-e-3",
-        "provider": "openai",
-        "description": "OpenAI DALL-E 3 - High quality image generation",
-        "active": false
-      },
-      {
         "name": "seedream-v3",
         "provider": "segmind",
         "description": "Seedream V3 - Artistic and creative image generation",
@@ -216,7 +192,7 @@
       }
     ],
     "activeModel": "juggernaut-pro-flux",
-    "count": 4
+    "count": 3
   }
 }
 ```
@@ -244,7 +220,7 @@
   "message": "AI model switched to juggernaut-pro-flux",
   "data": {
     "activeModel": "juggernaut-pro-flux",
-    "previousModel": "dall-e-3",
+    "previousModel": "seedream-v3",
     "switchedAt": "2025-01-28T17:00:00.000Z",
     "reason": "Testing new model for better quality"
   }
@@ -302,9 +278,9 @@
       {
         "timestamp": "2025-01-28T17:00:00.000Z",
         "previousModel": "juggernaut-pro-flux",
-        "newModel": "dall-e-3",
+        "newModel": "seedream-v3",
         "changedBy": "admin",
-        "reason": "Testing OpenAI model",
+        "reason": "Testing Segmind model",
         "requestMetadata": {
           "ipAddress": "127.0.0.1",
           "userAgent": "curl/7.68.0",
@@ -339,10 +315,10 @@
         "provider": "segmind",
         "description": "Juggernaut Pro Flux - Professional quality realistic images"
       },
-      "dall-e-3": {
+      "seedream-v3": {
         "enabled": true,
-        "provider": "openai",
-        "description": "OpenAI DALL-E 3 - High quality image generation"
+        "provider": "segmind",
+        "description": "Seedream V3 - Artistic and creative image generation"
       }
     }
   },
@@ -415,7 +391,7 @@
         "timestamp": "2025-01-28T17:00:00.000Z",
         "action": "UPDATE",
         "key": "ai-models",
-        "oldValue": { "activeModel": "dall-e-3" },
+        "oldValue": { "activeModel": "seedream-v3" },
         "newValue": { "activeModel": "juggernaut-pro-flux" },
         "changedBy": "admin",
         "reason": "Testing new model",
@@ -493,17 +469,6 @@ curl -X POST http://localhost:3000/api/admin/config/ai-model/switch \
   -d '{
     "model": "juggernaut-pro-flux",
     "reason": "Testing realistic image generation"
-  }'
-```
-
-### Переключение на DALL-E 3
-
-```bash
-curl -X POST http://localhost:3000/api/admin/config/ai-model/switch \
-  -H "Content-Type: application/json" \
-  -d '{
-    "model": "dall-e-3",
-    "reason": "Need high quality generation"
   }'
 ```
 
@@ -608,7 +573,7 @@ ConfigService реализует polling механизм, который:
   "level": "info",
   "message": "AI model switched",
   "data": {
-    "previousModel": "dall-e-3",
+    "previousModel": "seedream-v3",
     "newModel": "juggernaut-pro-flux",
     "reason": "Testing new model",
     "changedBy": "admin",

@@ -70,7 +70,6 @@
 - **Services** - основная бизнес-логика
 
 #### 3. AI Providers Layer
-- **OpenAI Service** - DALL-E 3 интеграция
 - **Segmind Services** - множественные AI модели
 - **Fallback System** - автоматическое переключение между провайдерами
 
@@ -150,17 +149,12 @@ Image → Metadata Processing → FTP Upload → 123RF → Status Update → Use
    - Качество: Профессиональные реалистичные изображения
    - Оптимизация: Для стоковых изображений
 
-2. **DALL-E 3** (OpenAI)
-   - Провайдер: OpenAI API
-   - Качество: Премиум с отличным пониманием промптов
-   - Особенности: Content filtering, revised prompts
-
-3. **Seedream V3** (Segmind)
+2. **Seedream V3** (Segmind)
    - Провайдер: Segmind API
    - Качество: Художественная и креативная генерация
    - Скорость: Быстрая обработка
 
-4. **HiDream-I1 Fast** (Segmind)
+3. **HiDream-I1 Fast** (Segmind)
    - Провайдер: Segmind API
    - Качество: Хорошее качество
    - Скорость: Очень быстрая генерация

@@ -7,7 +7,6 @@
 Система поддерживает множественные AI провайдеры генерации изображений с возможностью динамического переключения:
 
 - **Juggernaut Pro Flux** - Профессиональные реалистичные изображения (по умолчанию)
-- **OpenAI DALL-E 3** - Высококачественная генерация изображений
 - **Seedream V3** - Художественная и креативная генерация
 - **HiDream-I1 Fast** - Быстрая генерация изображений
 - **Real-ESRGAN Upscaling** - AI улучшение качества и масштабирование изображений
@@ -25,18 +24,7 @@
 - **Шаги**: Оптимизированы для качества
 - **Guidance Scale**: Настроен для реалистичности
 
-### 2. OpenAI DALL-E 3
-- **Model ID**: `dall-e-3`
-- **Provider**: OpenAI API
-- **Описание**: Высококачественная генерация с отличным пониманием промптов
-- **Формат вывода**: URL (загружается и обрабатывается)
-- **Разрешение**: 1024x1024, 1792x1024, 1024x1792 (обрабатывается до 4096x4096)
-- **Конфигурация**: Требует `OPENAI_API_KEY`
-- **Особенности**: Content filtering, revised prompts, премиум качество
-- **Качество**: standard, hd
-- **Стиль**: vivid, natural
-
-### 3. Seedream V3
+### 2. Seedream V3
 - **Model ID**: `seedream-v3`
 - **Provider**: Segmind API
 - **Описание**: Художественная и креативная генерация с уникальным стилем
@@ -47,7 +35,7 @@
 - **Шаги**: Оптимизированы для креативности
 - **Guidance Scale**: Настроен для художественности
 
-### 4. HiDream-I1 Fast
+### 3. HiDream-I1 Fast
 - **Model ID**: `hidream-i1-fast`
 - **Provider**: Segmind API
 - **Описание**: Быстрая высококачественная генерация, оптимизированная для скорости
@@ -58,7 +46,7 @@
 - **Шаги**: 4 (быстрая генерация)
 - **Guidance Scale**: 3.5
 
-### 5. Real-ESRGAN AI Upscaling
+### 4. Real-ESRGAN AI Upscaling
 - **Model ID**: `real-esrgan-upscaling`
 - **Provider**: Replicate API
 - **Модель**: `nightmareai/real-esrgan:42fed1c4974146d4d2414e2be2c5277c7fcf05fcc3a73abf41610695738c1d7b`
@@ -151,11 +139,6 @@
 ### Переменные окружения для AI моделей
 
 ```bash
-# OpenAI API Configuration
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1
-OPENAI_TIMEOUT=60000
-
 # Segmind API Configuration
 SEGMIND_API_KEY=your_segmind_api_key_here
 SEGMIND_BASE_URL=https://api.segmind.com/v1
@@ -191,11 +174,6 @@ REPLICATE_FACE_ENHANCE=true
       "enabled": true,
       "provider": "segmind",
       "description": "Seedream V3 - Artistic and creative image generation"
-    },
-    "dall-e-3": {
-      "enabled": true,
-      "provider": "openai",
-      "description": "OpenAI DALL-E 3 - High quality image generation"
     }
   }
 }
@@ -216,7 +194,7 @@ Response:
   "success": true,
   "data": {
     "config": {
-      "activeModel": "dall-e-3",
+      "activeModel": "juggernaut-pro-flux",
       "models": { ... }
     },
     "metadata": {
@@ -291,10 +269,10 @@ curl -X POST http://localhost:3000/api/admin/config/ai-model/switch \
   -H "Content-Type: application/json" \
   -d '{"model": "juggernaut-pro-flux", "reason": "Testing realistic generation"}'
 
-# Переключение на DALL-E 3
+# Переключение на Seedream V3
 curl -X POST http://localhost:3000/api/admin/config/ai-model/switch \
   -H "Content-Type: application/json" \
-  -d '{"model": "dall-e-3", "reason": "High quality generation needed"}'
+  -d '{"model": "seedream-v3", "reason": "Need artistic style images"}'
 
 # Проверка текущей конфигурации
 curl http://localhost:3000/api/admin/config
@@ -314,8 +292,7 @@ curl http://localhost:3000/api/admin/status
 1. **Juggernaut Pro Flux** (Основная - модель по умолчанию)
 2. **HiDream-I1 Fast** (Первый фоллбек)
 3. **Seedream V3** (Второй фоллбек)
-4. **DALL-E 3** (Третий фоллбек)
-5. **Mock Images** (Финальный фоллбек)
+4. **Mock Images** (Финальный фоллбек)
 
 ### Как это работает
 - При запросе генерации система начинает с активной модели
@@ -338,8 +315,7 @@ aiModels: {
   fallbackOrder: [
     'juggernaut-pro-flux',
     'hidream-i1-fast', 
-    'seedream-v3',
-    'dall-e-3'
+    'seedream-v3'
   ]
 }
 ```
@@ -487,11 +463,9 @@ ConfigService реализует polling механизм, который:
 1. **HiDream-I1 Fast** - ~5-10 секунд
 2. **Juggernaut Pro Flux** - ~10-15 секунд
 3. **Seedream V3** - ~10-20 секунд
-4. **DALL-E 3** - ~15-30 секунд
 
 ### Оптимизации:
 - Segmind модели используют прямой binary вывод
-- OpenAI модели требуют дополнительной загрузки по URL
 - Кэширование конфигурации для быстрого доступа
 - Потоковая передача изображений без буферизации
 
