@@ -3,8 +3,9 @@ services:
   mongodb:
     image: mongo:7.0.5
     container_name: ai-stock-bot-mongodb-prod
-    ports:
-      - "27017:27017"
+    # SECURITY: Removed port mapping for production - MongoDB only accessible internally
+    # ports:
+    #   - "27017:27017"  # Removed to prevent external access
     environment:
       - MONGO_INITDB_ROOT_USERNAME=${MONGO_INITDB_ROOT_USERNAME}
       - MONGO_INITDB_ROOT_PASSWORD=${MONGO_INITDB_ROOT_PASSWORD}
